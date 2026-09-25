@@ -40,10 +40,10 @@ type WarningContext struct {
 }
 
 type warningJSON struct {
-	Code          WarningCode      `json:"code"`
-	Message       string           `json:"message"`
-	Severity      string           `json:"severity"`
-	Normalization *Normalization   `json:"normalization,omitempty"`
+	Code          WarningCode         `json:"code"`
+	Message       string              `json:"message"`
+	Severity      string              `json:"severity"`
+	Normalization *Normalization      `json:"normalization,omitempty"`
 	Context       *warningContextJSON `json:"context,omitempty"`
 }
 

@@ -13,8 +13,25 @@ Python 3.10+. No third-party dependencies.
 ## Usage
 
 ```bash
-python3 main.py <input.csv> <output.csv>
+python3 main.py [--json] <input.csv> <output.csv>
 ```
+
+With `--json`, a machine-readable compliance log is also printed to `stdout`:
+
+```json
+{
+  "event": "compliance_summary",
+  "total": 4,
+  "by_address_type": {"C": 1, "G": 2, "M": 1},
+  "by_risk_label": {"INVALID_DESTINATION": 1, "OK": 2, "WARN_MEMO_TYPE_MISMATCH": 1},
+  "quarantined": [
+    {"address": "CA...", "address_type": "C", "risk_label": "INVALID_DESTINATION", "notes": "..."}
+  ]
+}
+```
+
+`quarantined` lists deposits that cannot be credited (`INVALID_DESTINATION`,
+`MISSING_MEMO`, `NON_ROUTABLE_MEMO`, `UNKNOWN`).
 
 ### Input CSV
 
@@ -79,11 +96,25 @@ After writing the CSV, the tool prints a summary to `stderr`:
 +--------------------------------------------------+
 ```
 
+## Tests
+
+```bash
+./run_tests.sh
+```
+
+Runs `main.py` end-to-end against `tests/fixtures/deposits.csv`, checking that
+it exits cleanly, writes the annotated CSV, and emits the expected JSON log
+structure. These tests run in CI via `.github/workflows/ci-examples.yml`.
+
 ## Project Structure
 
 ```
 python-compliance-logger/
 ├── main.py          # Entry point
-└── src/
-    └── reporter.py  # print_summary(rows) terminal report
+├── run_tests.sh     # Test runner
+├── src/
+│   └── reporter.py  # print_summary(rows) terminal report, build_report(rows) JSON log
+└── tests/
+    ├── fixtures/deposits.csv
+    └── test_main.py
 ```

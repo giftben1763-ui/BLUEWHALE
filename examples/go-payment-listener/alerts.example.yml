@@ -1,0 +1,110 @@
+# alerts.example.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Prometheus alerting rules for the Stellar Payment Listener.
+#
+# Copy this file to your Prometheus rules directory and reference it from
+# prometheus.yml:
+#
+#   rule_files:
+#     - "alerts.example.yml"
+#
+# Then reload Prometheus:
+#   curl -X POST http://localhost:9090/-/reload
+#
+# See README.md for full Prometheus + Alertmanager setup instructions.
+# ─────────────────────────────────────────────────────────────────────────────
+
+groups:
+  - name: stellar_payment_listener
+    rules:
+
+      # ── Unroutable payment spike ──────────────────────────────────────────
+      # Fires when the per-second rate of unroutable payments (contract senders,
+      # invalid checksums, missing memos, etc.) exceeds 5 events over a 5-minute
+      # window.  This typically indicates an exchange integration bug, an
+      # on-chain exploit probing the deposit address, or a sudden burst of
+      # malformed transactions.
+      - alert: UnroutablePaymentSpike
+        expr: rate(stellar_payment_unroutable_total[5m]) > 5
+        for: 1m
+        labels:
+          severity: critical
+          team: payments
+        annotations:
+          summary: "High rate of unroutable Stellar payments"
+          description: >-
+            The rate of unroutable payments has exceeded 5 per second over the
+            last 5 minutes (current value: {{ $value | printf "%.2f" }}/s).
+            Inspect the listener logs for `alert=true` events to identify the
+            root cause (contract senders, invalid checksums, or missing memos).
+          runbook_url: "https://bluewhale.mintlify.app/docs/common-mistakes"
+
+      # ── Elevated unroutable payment warning ──────────────────────────────
+      # Softer warning that fires before the critical threshold is reached,
+      # giving operators time to investigate before an outage occurs.
+      - alert: UnroutablePaymentElevated
+        expr: rate(stellar_payment_unroutable_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+          team: payments
+        annotations:
+          summary: "Elevated rate of unroutable Stellar payments"
+          description: >-
+            The rate of unroutable payments is above 1/s for 2 minutes
+            (current value: {{ $value | printf "%.2f" }}/s).
+            Review recent `error`-level log entries for compliance anomalies.
+          runbook_url: "https://bluewhale.mintlify.app/docs/common-mistakes"
+
+      # ── Contract-sender payment spike ─────────────────────────────────────
+      # Payments originating from C-addresses (Soroban contracts) cannot be
+      # safely routed to a user account.  A burst of these is a strong signal
+      # of an on-chain attack or misconfigured smart contract integration.
+      - alert: ContractSenderSpike
+        expr: rate(stellar_payments_total{severity="error"}[5m]) > 3
+        for: 1m
+        labels:
+          severity: warning
+          team: payments
+        annotations:
+          summary: "Spike in error-severity payments (possible contract-sender attack)"
+          description: >-
+            More than 3 error-severity payments per second have been detected
+            over the last 5 minutes (current: {{ $value | printf "%.2f" }}/s).
+            Check for contract-sender deposits using the `/metrics` endpoint.
+          runbook_url: "https://bluewhale.mintlify.app/docs/concepts/routing-logic"
+
+      # ── Listener liveness ─────────────────────────────────────────────────
+      # The listener exports a /healthz endpoint.  If Prometheus cannot scrape
+      # it for 3 consecutive intervals, the process has likely crashed.
+      - alert: PaymentListenerDown
+        expr: up{job="stellar-listener"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: payments
+        annotations:
+          summary: "Stellar payment listener is down"
+          description: >-
+            The Prometheus scrape target `stellar-listener` has been unreachable
+            for more than 1 minute.  The deposit pipeline is likely halted.
+            Restart the listener container and verify that port 9090 is
+            accessible.
+          runbook_url: "https://bluewhale.mintlify.app/docs/guides/go-deposit-routing"
+
+      # ── No payments processed (stale stream) ─────────────────────────────
+      # If no payments of any severity have been recorded in the last 30 minutes
+      # during business hours, the Horizon stream may have stalled silently.
+      - alert: PaymentStreamStale
+        expr: increase(stellar_payments_total[30m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+          team: payments
+        annotations:
+          summary: "No payments processed in the last 30 minutes"
+          description: >-
+            `stellar_payments_total` has not increased in 30 minutes.
+            This may indicate a stalled Horizon SSE stream.  Verify that the
+            listener is connected and that Horizon is reachable.
+          runbook_url: "https://bluewhale.mintlify.app/docs/guides/go-deposit-routing"

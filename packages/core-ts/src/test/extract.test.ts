@@ -105,35 +105,86 @@ describe("MEMO_IGNORED_FOR_MUXED warning", () => {
   });
 });
 
-// ─── 3. CONTRACT_SENDER_DETECTED ─────────────────────────────────────────────
+// ─── 3. C-address zero-throw policy ──────────────────────────────────────────
 //
-// C-addresses are rejected by assertRoutableAddress() before reaching the
-// parsed.kind === "C" branch, so extractRouting throws ExtractRoutingError
-// rather than returning a CONTRACT_SENDER_DETECTED warning object.
-// This test documents that gate behaviour.
+// C-addresses used to throw ExtractRoutingError but the zero-throw policy
+// (Issue #77) means extractRouting now returns a structured result with an
+// INVALID_DESTINATION warning instead of throwing.
 
-describe("CONTRACT_SENDER_DETECTED – C-address routing guard", () => {
+describe("C-address – zero-throw policy (#77)", () => {
   // A well-formed Stellar contract address (C-prefix).
   const C_ADDRESS = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
-  it("throws ExtractRoutingError for a contract address", () => {
-    expect(() => extractRouting(input(C_ADDRESS))).toThrow(ExtractRoutingError);
+  it("does NOT throw for a contract address", () => {
+    expect(() => extractRouting(input(C_ADDRESS))).not.toThrow();
   });
 
-  it("error message identifies the invalid destination prefix", () => {
-    expect(() => extractRouting(input(C_ADDRESS))).toThrow(
-      /expected a G or M address/
-    );
+  it("returns a structured result with routingSource 'none'", () => {
+    const result = extractRouting(input(C_ADDRESS));
+    expect(result.routingSource).toBe("none");
+    expect(result.destinationBaseAccount).toBeNull();
+    expect(result.routingId).toBeNull();
   });
 
-  it("does NOT return a result object – no silent failure", () => {
-    let result: RoutingResult | undefined;
-    try {
-      result = extractRouting(input(C_ADDRESS));
-    } catch {
-      // expected
-    }
-    expect(result).toBeUndefined();
+  it("emits an INVALID_DESTINATION error-severity warning", () => {
+    const result = extractRouting(input(C_ADDRESS));
+    const warning = result.warnings.find((w) => w.code === "INVALID_DESTINATION");
+    expect(warning).toBeDefined();
+    expect(warning!.severity).toBe("error");
+  });
+});
+
+// ─── 3b. CONTRACT_SENDER_DETECTED (contract source account) ──────────────────
+//
+// When the *sender* is a Soroban contract, routing state is cleared and a
+// CONTRACT_SENDER_DETECTED info warning is returned (parity with Go and Dart).
+
+describe("CONTRACT_SENDER_DETECTED – contract source account", () => {
+  const C_SOURCE = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+  const expected: RoutingResult = {
+    destinationBaseAccount: null,
+    routingId: null,
+    routingSource: "none",
+    warnings: [
+      {
+        code: "CONTRACT_SENDER_DETECTED",
+        severity: "info",
+        message: "Contract source detected. Routing state cleared.",
+      },
+    ],
+  };
+
+  it("clears routing state for a G destination with a memo", () => {
+    const result = extractRouting({
+      ...input(G_ADDRESS, "id", "100"),
+      sourceAccount: C_SOURCE,
+    });
+    expect(result).toEqual(expected);
+  });
+
+  it("clears routing state for an M destination", () => {
+    const result = extractRouting({
+      ...input(M_ADDRESS),
+      sourceAccount: C_SOURCE,
+    });
+    expect(result).toEqual(expected);
+  });
+
+  it("does not trigger for a G source account", () => {
+    const result = extractRouting({
+      ...input(G_ADDRESS, "id", "100"),
+      sourceAccount: G_ADDRESS,
+    });
+    expect(result.routingSource).toBe("memo");
+    expect(result.routingId).toBe("100");
+  });
+
+  it("ignores an unparseable source account", () => {
+    const result = extractRouting({
+      ...input(G_ADDRESS, "id", "100"),
+      sourceAccount: "CNOTAVALIDCONTRACT",
+    });
+    expect(result.routingSource).toBe("memo");
   });
 });
 

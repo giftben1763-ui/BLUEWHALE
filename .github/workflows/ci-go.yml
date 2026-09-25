@@ -2,24 +2,37 @@ name: ci-go
 
 on:
   pull_request:
+    # GitHub rejects `paths` and `paths-ignore` on the same event, so the
+    # exclusion is expressed as a negated pattern. Vectors-only PRs are owned
+    # by `verify-parity`; PRs that also touch packages/core-go/** run here.
     paths:
       - "packages/core-go/**"
       - "spec/**"
-    # `verify-parity` owns this file's CI surface; skip here to avoid
-    # duplicate runs on vectors-only PRs.
-    paths-ignore:
-      - "spec/vectors.json"
-    # Note: paths + paths-ignore combine as an AND across all changed files.
-    # If a PR changes spec/vectors.json *together with* packages/core-go/**,
-    # this workflow is skipped; verify-parity.yml still runs the identical
-    # commands, so functional coverage is preserved under a different check.
+      - "!spec/vectors.json"
+      - ".github/workflows/ci-go.yml"
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ["1.22", "1.23"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
       - run: cd packages/core-go && go test ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/core-go/go.mod
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          working-directory: packages/core-go

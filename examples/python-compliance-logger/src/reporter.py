@@ -1,6 +1,29 @@
 import sys
 from collections import Counter
 
+# Risk labels that mean a deposit cannot be credited and must be held for review.
+QUARANTINE_LABELS = {"INVALID_DESTINATION", "MISSING_MEMO", "NON_ROUTABLE_MEMO", "UNKNOWN"}
+
+
+def build_report(rows: list[dict]) -> dict:
+    """Machine-readable compliance log, emitted as JSON with --json."""
+    return {
+        "event": "compliance_summary",
+        "total": len(rows),
+        "by_address_type": dict(sorted(Counter(r.get("address_type", "UNKNOWN") for r in rows).items())),
+        "by_risk_label": dict(sorted(Counter(r.get("risk_label", "UNKNOWN") for r in rows).items())),
+        "quarantined": [
+            {
+                "address": r["address"],
+                "address_type": r["address_type"],
+                "risk_label": r["risk_label"],
+                "notes": r["notes"],
+            }
+            for r in rows
+            if r.get("risk_label") in QUARANTINE_LABELS
+        ],
+    }
+
 
 def print_summary(rows: list[dict]) -> None:
     total = len(rows)

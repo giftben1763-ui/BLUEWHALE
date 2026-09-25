@@ -1,0 +1,35 @@
+name: fuzz-go
+
+# Seed corpora for FuzzParse / FuzzDetect already run on every PR as part of
+# `go test ./...` in ci-go. This job does the actual coverage-guided fuzzing.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: "Duration per fuzz target (Go duration, e.g. 5m)"
+        required: false
+        default: "5m"
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [FuzzParse, FuzzDetect]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: packages/core-go/go.mod
+      - name: Run ${{ matrix.target }}
+        working-directory: packages/core-go
+        run: go test ./address -run '^$' -fuzz '^${{ matrix.target }}$' -fuzztime "${{ inputs.fuzztime || '5m' }}"
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-findings-${{ matrix.target }}
+          path: packages/core-go/address/testdata/fuzz/

@@ -48,8 +48,9 @@ export 'src/routing/extract.dart';
 export 'src/routing/memo.dart' hide uint64Max, digitsOnly;
 export 'src/routing/routing_result.dart';
 export 'src/routing/safe_routing_id.dart';
-
-// Exceptions
+export 'src/routing/severity.dart';
+export 'src/util/web_platform.dart';
+export 'src/muxed/muxed_address.dart';
 export 'src/exceptions.dart';
 
 // Platform

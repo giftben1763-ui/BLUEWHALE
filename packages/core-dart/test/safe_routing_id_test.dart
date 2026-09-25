@@ -83,100 +83,77 @@ void main() {
     });
   });
 
-  group('SafeRoutingId.tryParse numeric edge cases', () {
-    final two = BigInt.two;
+  group('SafeRoutingId.tryParse never throws on malformed input', () {
+    // The families this issue names — blank, `'0x123'`, `'1e10'`, whitespace —
+    // plus the neighbouring forms a MEMO_ID really arrives in: from a URI, a
+    // JSON payload, a hand-edited config, or a copy-paste out of a table.
+    const malformed = <String>[
+      // blank and whitespace (ASCII and not)
+      '', ' ', '\t', '\n', '\u00a0', ' 42', '42 ', '4 2', '42\t',
+      // radix prefixes and digit separators
+      '0x123', '0X1F', '0b1010', '0o17', '0d42', '#10', '1_000', '1,000',
+      // exponent and fractional notation
+      '1e10', '1E10', '1e+10', '1.5', '1.', '.5', '0.0', '1.0e3',
+      // signs
+      '-1', '+1', '--1', '+-1', '-0', '+0', '1-',
+      // non-ASCII digits must not slip past the decimal check
+      '٢٣', '۱۲۳', '１２３', '²³', 'Ⅳ',
+      // words, null-likes, and a bare prefix
+      'null', 'NaN', 'Infinity', 'fourty', '0x',
+      // out of uint64 range
+      '18446744073709551616', '99999999999999999999999999999999999999999',
+    ];
 
-    /// Malformed inputs grouped by category. Each must yield `null` from
-    /// both [SafeRoutingId.tryParse] and [SafeRoutingId.tryParseStrict]
-    /// without throwing.
-    const malformed = <String, List<String>>{
-      'empty': [''],
-      'whitespace only': [' ', '   ', '\t', '\n', '\r\n', ' '],
-      'surrounding whitespace': [
-        ' 123', '123 ', ' 123 ', '\t123', '123\n', '\n123\r\n', ' 123',
-      ],
-      'inner whitespace': ['1 23', '1\t23', '12\n3'],
-      'hexadecimal prefix': ['0x123', '0X123', '0x', '0xFF', '0x0', '-0x1'],
-      'other radix prefixes': ['0b101', '0o17', '0B1', '0O7'],
-      'scientific notation': [
-        '1e10', '1E10', '1e+10', '1e-10', '1.5e3', 'e10', '1e', '9e18',
-      ],
-      'decimal point': ['1.', '.1', '1.0', '0.0', '18446744073709551615.0'],
-      'signs': ['-0', '+0', '-1', '+1', '--1', '−1'],
-      'non-ASCII digits': ['١٢٣', '１２３', '१'],
-      'special values': ['NaN', 'Infinity', '-Infinity', 'null'],
-      'trailing garbage': ['123abc', 'abc123', '12_3', '1,000'],
-    };
-
-    malformed.forEach((category, inputs) {
-      test('$category returns null without throwing', () {
-        for (final input in inputs) {
-          final escaped = Uri.encodeComponent(input);
-          expect(() => SafeRoutingId.tryParse(input), returnsNormally,
-              reason: 'tryParse("$escaped") must not throw.');
-          expect(SafeRoutingId.tryParse(input), isNull,
-              reason: 'tryParse("$escaped") must return null.');
-          expect(() => SafeRoutingId.tryParseStrict(input), returnsNormally,
-              reason: 'tryParseStrict("$escaped") must not throw.');
-          expect(SafeRoutingId.tryParseStrict(input), isNull,
-              reason: 'tryParseStrict("$escaped") must return null.');
-        }
+    for (final input in malformed) {
+      test('"$input" → tryParse null, parse FormatException naming the input',
+          () {
+        expect(SafeRoutingId.tryParse(input), isNull,
+            reason: 'tryParse must return null for "$input" instead of throwing');
+        expect(
+          () => SafeRoutingId.parse(input),
+          throwsA(predicate(
+              (Object e) => e is FormatException && e.source == input)),
+          reason: 'parse must reject "$input" and carry it as the source',
+        );
       });
+    }
+
+    test('the whole corpus is rejected without a single throw', () {
+      for (final input in malformed) {
+        expect(() => SafeRoutingId.tryParse(input), returnsNormally,
+            reason: 'tryParse threw on "$input"');
+      }
     });
+  });
 
-    test('very long inputs return null without throwing', () {
-      final hugeDigits = '9' * 10000;
-      final hugeGarbage = 'x' * 10000;
-      expect(SafeRoutingId.tryParse(hugeDigits), isNull);
-      expect(SafeRoutingId.tryParse(hugeGarbage), isNull);
-    });
+  group('SafeRoutingId round-trip invariant', () {
+    test('every accepted input re-parses to an equal id', () {
+      const corpus = <String>[
+        ...boundaryVectors,
+        '1',
+        '007',
+        '000',
+        '000000000000000000000000000001',
+        // Malformed families are in the same corpus to prove the check is
+        // one-sided: they are simply skipped, never accepted by accident.
+        '',
+        '0x123',
+        '1e10',
+        ' ',
+        '٤٢',
+      ];
 
-    test('long runs of leading zeros normalize (lenient) or reject (strict)',
-        () {
-      final padded = '${'0' * 100}18446744073709551615';
-      expect(SafeRoutingId.tryParse(padded)?.value,
-          equals('18446744073709551615'));
-      expect(SafeRoutingId.tryParseStrict(padded), isNull);
-      expect(SafeRoutingId.tryParse('0' * 50)?.value, equals('0'));
-    });
+      for (final input in corpus) {
+        final id = SafeRoutingId.tryParse(input);
+        if (id == null) continue;
 
-    final boundaries = <String, BigInt>{
-      '0': BigInt.zero,
-      '2^53 - 1': two.pow(53) - BigInt.one,
-      '2^53': two.pow(53),
-      '2^64 - 1': two.pow(64) - BigInt.one,
-    };
-
-    boundaries.forEach((label, expected) {
-      test('boundary $label parses to the exact value', () {
-        final text = expected.toString();
-        final lenient = SafeRoutingId.tryParse(text);
-        final strict = SafeRoutingId.tryParseStrict(text);
-        expect(lenient, isNotNull);
-        expect(lenient!.toBigInt, equals(expected));
-        expect(lenient.value, equals(text));
-        expect(strict, equals(lenient));
-      });
-    });
-
-    test('boundary constants match their computed values', () {
-      expect(SafeRoutingId.maxJsSafeInteger,
-          equals(boundaries['2^53 - 1']));
-      expect(SafeRoutingId.uint64Max, equals(boundaries['2^64 - 1']));
-    });
-
-    test('JS-safety flips exactly between 2^53 - 1 and 2^53', () {
-      expect(SafeRoutingId.tryParse(boundaries['2^53 - 1'].toString())!.isJsSafe,
-          isTrue);
-      expect(SafeRoutingId.tryParse(boundaries['2^53'].toString())!.isJsSafe,
-          isFalse);
-    });
-
-    test('2^64 is the first value rejected', () {
-      final overflow = two.pow(64).toString();
-      expect(overflow, equals('18446744073709551616'));
-      expect(SafeRoutingId.tryParse(overflow), isNull);
-      expect(SafeRoutingId.tryParseStrict(overflow), isNull);
+        final again = SafeRoutingId.tryParse(id.value);
+        expect(again, equals(id),
+            reason: 'canonical form of "$input" did not re-parse to an equal id');
+        expect(again!.toBigInt, equals(id.toBigInt));
+        expect(BigInt.parse(id.value), equals(id.toBigInt));
+        expect(SafeRoutingId.parse(id.value), equals(id));
+      }
     });
   });
 

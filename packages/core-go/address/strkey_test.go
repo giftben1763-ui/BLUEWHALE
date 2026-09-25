@@ -1,7 +1,10 @@
 package address
 
 import (
+	"bytes"
 	"testing"
+
+	"github.com/stellar/go/strkey"
 )
 
 func TestDecodeStrKey(t *testing.T) {
@@ -127,5 +130,54 @@ func TestDetect(t *testing.T) {
 				t.Errorf("expected kind %v, got %v", tt.kind, kind)
 			}
 		})
+	}
+}
+
+// TestStrKeyMatchesStellarGo cross-checks the in-house strkey codec against
+// github.com/stellar/go/strkey, the reference implementation. See
+// docs/WHY_STRKEY_DEP.md for why address/ does not call it directly.
+func TestStrKeyMatchesStellarGo(t *testing.T) {
+	kinds := []struct {
+		name       string
+		ours       byte
+		reference  strkey.VersionByte
+		payloadLen int
+	}{
+		{name: "G", ours: VersionByteG, reference: strkey.VersionByteAccountID, payloadLen: 32},
+		{name: "M", ours: VersionByteM, reference: strkey.VersionByteMuxedAccount, payloadLen: 40},
+		{name: "C", ours: VersionByteC, reference: strkey.VersionByteContract, payloadLen: 32},
+	}
+
+	for _, k := range kinds {
+		for seed := 0; seed < 64; seed++ {
+			payload := make([]byte, k.payloadLen)
+			for i := range payload {
+				payload[i] = byte(seed*31 + i*7)
+			}
+
+			want, err := strkey.Encode(k.reference, payload)
+			if err != nil {
+				t.Fatalf("%s: strkey.Encode: %v", k.name, err)
+			}
+			got, err := EncodeStrKey(k.ours, payload)
+			if err != nil {
+				t.Fatalf("%s: EncodeStrKey: %v", k.name, err)
+			}
+			if got != want {
+				t.Fatalf("%s seed %d: EncodeStrKey = %s, stellar/go = %s", k.name, seed, got, want)
+			}
+
+			vb, decoded, err := DecodeStrKey(want)
+			if err != nil {
+				t.Fatalf("%s seed %d: DecodeStrKey(%s): %v", k.name, seed, want, err)
+			}
+			refDecoded, err := strkey.Decode(k.reference, want)
+			if err != nil {
+				t.Fatalf("%s seed %d: strkey.Decode: %v", k.name, seed, err)
+			}
+			if vb != k.ours || !bytes.Equal(decoded, refDecoded) {
+				t.Fatalf("%s seed %d: DecodeStrKey payload differs from stellar/go", k.name, seed)
+			}
+		}
 	}
 }

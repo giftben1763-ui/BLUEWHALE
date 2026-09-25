@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/REDISHFISH/BLUEWHALE/packages/core-go/address"
-	"github.com/REDISHFISH/BLUEWHALE/packages/core-go/muxed"
 )
 
 // normalizeUnsupportedMemoType canonicalizes a memo type string by lower-casing it
@@ -44,8 +43,14 @@ func normalizeUnsupportedMemoType(memoType string) string {
 // ExtractRouting identifies the deposit routing destination and identifier from a Stellar
 // payment input. It implements the standard priority policy where M-address identifiers
 // take precedence over any provided memo. Returns a RoutingResult with the decoded
-// state and applicable warnings.
+// state and applicable warnings, filtered by input.MinSeverityLevel.
 func ExtractRouting(input RoutingInput) RoutingResult {
+	result := extractRouting(input)
+	result.Warnings = FilterBySeverity(result.Warnings, input.MinSeverityLevel)
+	return result
+}
+
+func extractRouting(input RoutingInput) RoutingResult {
 	if input.SourceAccount != "" {
 		source, err := address.Parse(input.SourceAccount)
 		if err == nil && source.Kind == address.KindC {
@@ -87,17 +92,9 @@ func ExtractRouting(input RoutingInput) RoutingResult {
 	}
 
 	if parsed.Kind == address.KindM {
-		baseG, id, err := muxed.DecodeMuxed(parsed.Raw)
-		if err != nil {
-			return RoutingResult{
-				RoutingSource: "none",
-				Warnings:      []address.Warning{},
-				DestinationError: &DestinationError{
-					Code:    address.ErrUnknownPrefix,
-					Message: err.Error(),
-				},
-			}
-		}
+		// address.Parse already decoded the muxed payload; reuse it rather
+		// than decoding the M-address a second time.
+		baseG, id := parsed.BaseG, parsed.MuxedID
 
 		// Pre-allocate with capacity for existing warnings plus at most one more.
 		warnings := make([]address.Warning, 0, len(parsed.Warnings)+1)
@@ -205,6 +202,10 @@ func ExtractRouting(input RoutingInput) RoutingResult {
 
 // MemoRequirementFetcher retrieves whether a destination account requires a
 // routing memo. Implementations can use Horizon, an indexer, or a cached source.
+//
+// Deprecated: Use [ContextMemoRequirementFetcher] and
+// [ExtractRoutingWithContext] instead, which accept a [context.Context] for
+// cancellation and deadline propagation.
 type MemoRequirementFetcher func(baseAccount string) (bool, error)
 
 // ExtractRoutingWithMemoRequirement performs normal routing extraction and
@@ -221,7 +222,7 @@ func ExtractRoutingWithMemoRequirement(ctx context.Context, input RoutingInput, 
 	if fetch == nil || result.DestinationBaseAccount == "" || result.RoutingID != nil || result.DestinationError != nil {
 		return result
 	}
-	required, err := fetch(result.DestinationBaseAccount)
+	required, err := fetch(ctx, result.DestinationBaseAccount)
 	if err == nil && required {
 		result.Warnings = append(result.Warnings, address.Warning{
 			Code:     address.WarnMissingRequiredMemo,
@@ -230,6 +231,26 @@ func ExtractRoutingWithMemoRequirement(ctx context.Context, input RoutingInput, 
 		})
 	}
 	return result
+}
+
+// ExtractRoutingWithMemoRequirement performs normal routing extraction and
+// optionally adds the SEP-0029 error when a classic destination requires a
+// memo but no routing ID was supplied. Fetch failures fail open so callers
+// retain the result of the synchronous parser.
+//
+// Deprecated: Use [ExtractRoutingWithContext] with a [ContextMemoRequirementFetcher]
+// to enable request cancellation and deadline propagation.
+func ExtractRoutingWithMemoRequirement(input RoutingInput, fetch MemoRequirementFetcher) RoutingResult {
+	if fetch == nil {
+		return ExtractRoutingWithContext(context.Background(), input, nil)
+	}
+	// Wrap the legacy fetcher so it satisfies ContextMemoRequirementFetcher.
+	// The context is intentionally not forwarded to the wrapped function
+	// (it has no context parameter), but callers can migrate to
+	// ExtractRoutingWithContext when they are ready.
+	return ExtractRoutingWithContext(context.Background(), input, func(_ context.Context, baseAccount string) (bool, error) {
+		return fetch(baseAccount)
+	})
 }
 
 func stringValue(s string) string {

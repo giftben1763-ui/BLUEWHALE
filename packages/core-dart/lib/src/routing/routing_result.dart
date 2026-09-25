@@ -31,6 +31,30 @@ enum RoutingSource {
   }
 }
 
+/// Severity levels for routing warnings, ordered from least to most severe.
+///
+/// Used with [RoutingInput.minSeverityLevel] to filter warnings by importance.
+enum WarningSeverity {
+  /// Informational notice; no action required.
+  info,
+
+  /// Potential problem that may need attention.
+  warn,
+
+  /// Serious problem; the payment should not be credited automatically.
+  error;
+
+  /// Parses a wire severity string (`info`, `warn`, `error`).
+  ///
+  /// Returns `null` for unrecognized values.
+  static WarningSeverity? tryParse(String value) {
+    for (final s in WarningSeverity.values) {
+      if (s.name == value) return s;
+    }
+    return null;
+  }
+}
+
 /// Represents a non-blocking notification emitted during routing resolution.
 class RoutingWarning {
   /// The unique code identifying the warning type.
@@ -58,8 +82,8 @@ class RoutingWarning {
 
   /// Emitted when the transaction sender is detected as a smart contract.
   static const contractSender = RoutingWarning(
-    code: 'contract-sender',
-    severity: WarningSeverity.info,
+    code: 'CONTRACT_SENDER_DETECTED',
+    severity: 'info',
     message: 'Contract source detected. Routing state cleared.',
   );
 
@@ -69,6 +93,18 @@ class RoutingWarning {
     severity: WarningSeverity.error,
     message: 'Destination account requires a memo, but no routing ID was provided.',
   );
+
+  /// Emitted when the destination is a contract (C) address, which cannot
+  /// receive classic payments.
+  static const invalidDestination = RoutingWarning(
+    code: 'INVALID_DESTINATION',
+    severity: 'error',
+    message: 'C address is not a valid destination',
+  );
+
+  /// The parsed [WarningSeverity] of this warning, or `null` if [severity]
+  /// is not a recognized level.
+  WarningSeverity? get severityLevel => WarningSeverity.tryParse(severity);
 
   @override
   String toString() => '[$severity] $code: $message';
@@ -137,15 +173,16 @@ class RoutingInput {
   /// The source account address of the transaction.
   final String? sourceAccount;
 
-  /// Creates a routing input.
-  ///
-  /// [memoType] must be one of `none`, `id`, `text`, `hash`, or `return`;
-  /// any other value produces an `UNSUPPORTED_MEMO_TYPE` warning.
+  /// Minimum severity (`info`, `warn` or `error`) of warnings to include in
+  /// the result. Defaults to `info` (all warnings are returned).
+  final String? minSeverityLevel;
+
   RoutingInput({
     required this.destination,
     required this.memoType,
     this.memoValue,
     this.sourceAccount,
+    this.minSeverityLevel,
   });
 }
 
@@ -187,6 +224,97 @@ final class RoutingResult {
     this.destinationBaseAccount,
     this.destinationError,
   }) : warnings = List.unmodifiable(warnings ?? const []);
+
+  /// Serializes this result to a JSON-compatible map.
+  ///
+  /// JSON key names are harmonized with the Go and TypeScript implementations:
+  /// - [source]                → `"routingSource"`
+  /// - [id]                   → `"routingId"` (decimal string, or null)
+  /// - [destinationBaseAccount] → `"destinationBaseAccount"`
+  /// - [warnings]             → `"warnings"`
+  /// - [destinationError]     → `"destinationError"` (or absent when null)
+  ///
+  /// The routing ID is always serialized as a **decimal string** — never as a
+  /// JS `Number` — so the exact uint64 value survives across isolate boundaries
+  /// and platform channels on Flutter Web.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'destinationBaseAccount': destinationBaseAccount,
+      'routingId': id?.toString(),
+      'routingSource': source.name,
+      'warnings': warnings
+          .map((w) => <String, dynamic>{
+                'code': w.code,
+                'severity': w.severity,
+                'message': w.message,
+              })
+          .toList(),
+      if (destinationError != null)
+        'destinationError': <String, dynamic>{
+          'code': destinationError!.code,
+          'message': destinationError!.message,
+        },
+    };
+  }
+
+  /// Deserializes a [RoutingResult] from a JSON-compatible map.
+  ///
+  /// Expects the canonical cross-language JSON keys produced by [toJson]:
+  /// `routingSource`, `routingId`, `destinationBaseAccount`, `warnings`,
+  /// and optionally `destinationError`.
+  ///
+  /// The routing ID is parsed from a **decimal string** using [SafeRoutingId]
+  /// to guarantee bit-exact values on Flutter Web.
+  factory RoutingResult.fromJson(Map<String, dynamic> json) {
+    // Parse routingSource enum
+    final sourceName = json['routingSource'] as String? ?? 'none';
+    final source = RoutingSource.values.firstWhere(
+      (e) => e.name == sourceName,
+      orElse: () => RoutingSource.none,
+    );
+
+    // Parse routingId as a decimal string to avoid JS Number precision loss
+    BigInt? id;
+    final rawId = json['routingId'];
+    if (rawId != null) {
+      final idStr = rawId.toString();
+      final safe = SafeRoutingId.tryParse(idStr);
+      id = safe?.toBigInt;
+    }
+
+    // Parse warnings
+    final rawWarnings = json['warnings'];
+    final warnings = <RoutingWarning>[];
+    if (rawWarnings is List) {
+      for (final w in rawWarnings) {
+        if (w is Map<String, dynamic>) {
+          warnings.add(RoutingWarning(
+            code: w['code'] as String? ?? '',
+            severity: w['severity'] as String? ?? 'info',
+            message: w['message'] as String? ?? '',
+          ));
+        }
+      }
+    }
+
+    // Parse optional destinationError
+    DestinationError? destinationError;
+    final rawError = json['destinationError'];
+    if (rawError is Map<String, dynamic>) {
+      destinationError = DestinationError(
+        code: rawError['code'] as String? ?? '',
+        message: rawError['message'] as String? ?? '',
+      );
+    }
+
+    return RoutingResult(
+      source: source,
+      id: id,
+      destinationBaseAccount: json['destinationBaseAccount'] as String?,
+      warnings: warnings,
+      destinationError: destinationError,
+    );
+  }
 
   /// The routing ID as an exact, canonical decimal string, or `null` when
   /// no ID was resolved.

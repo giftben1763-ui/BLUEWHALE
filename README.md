@@ -3,9 +3,12 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.0.1-blue?style=for-the-badge" alt="Version 1.0.1" />
+  <img src="https://img.shields.io/badge/Version-1.2.0-blue?style=for-the-badge" alt="Version 1.2.0" />
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License MIT" />
   <img src="https://img.shields.io/badge/Documentation-Live-blue?style=for-the-badge&logo=gitbook&logoColor=white" alt="Docs" />
+  <a href="https://codecov.io/gh/REDISHFISH/BLUEWHALE">
+    <img src="https://codecov.io/gh/REDISHFISH/BLUEWHALE/graph/badge.svg" alt="Coverage" />
+  </a>
 </p>
 
 **Bluewhale** is a specialized, multi-language library designed to solve the complexity of deposit routing on the Stellar network. It provides a unified, spec-compliant way to handle G-addresses (classic), M-addresses (muxed), and C-addresses (contracts) across TypeScript, Go, and Dart.
@@ -32,6 +35,7 @@ For full technical specifications, architecture deep-dives, and API references, 
 - **[Routing Logic](https://bluewhale.mintlify.app/docs/concepts/routing-logic)**: Complete reference of all routing scenarios.
 - **[Common Mistakes](https://bluewhale.mintlify.app/docs/common-mistakes)**: Avoid the 6 most common integration pitfalls.
 - **[Language Guides](https://bluewhale.mintlify.app/docs/guides/go-deposit-routing)**: Specialized guides for Go, TypeScript, and Flutter.
+- **[React UI Guide](https://bluewhale.mintlify.app/docs/guides/react-address-input)**: Drop-in address input components for React apps.
 
 ## Packages
 
@@ -41,6 +45,7 @@ For full technical specifications, architecture deep-dives, and API references, 
 | **React UI**       | `@redishfish/bluewhale` | `npm install @redishfish/bluewhale`                                  |
 | **Go**             | `core-go`             | `go get github.com/REDISHFISH/BLUEWHALE/packages/core-go` |
 | **Dart / Flutter** | `bluewhale_core` | `dart pub add bluewhale_core`                                   |
+| **React (UI)**     | `@redishfish/bluewhale` | `npm install @redishfish/bluewhale`                                |
 
 ### UI Component Styling
 
@@ -63,12 +68,30 @@ console.log(result.address); // "GA7Q..."
 console.log(result.routingId); // "123"
 ```
 
-## Core Features
+## React UI Components
 
-- **Spec-First Design**: Guaranteed identical behavior across all three languages via a shared test vector suite.
-- **Precision Safety**: Built-in protection against 64-bit integer precision loss in JavaScript and Flutter Web.
-- **Warning System**: Discriminated unions (TS) or structured objects (Go/Dart) to catch edge cases like numeric `MEMO_TEXT`.
-- **Zero Dependencies**: Core logic is lightweight and has zero external dependencies beyond standard library features.
+`@redishfish/bluewhale` ships ready-made React components for wallet and exchange address forms: an address input with a live G/M/C type badge, a memo field that only appears when a memo is meaningful, and inline warnings (e.g. for contract addresses).
+
+```bash
+npm install @redishfish/bluewhale react
+```
+
+```tsx
+import { AddressInput } from "@redishfish/bluewhale";
+
+export function WithdrawForm() {
+  return (
+    <form>
+      <label>Destination</label>
+      {/* Detects G/M/C addresses, shows a memo field for G-addresses,
+          and warns when a contract (C) address is entered. */}
+      <AddressInput />
+    </form>
+  );
+}
+```
+
+The building blocks (`TypeBadge`, `MemoField`, `WarningList`) are also exported for custom layouts. See the [React UI Guide](https://bluewhale.mintlify.app/docs/guides/react-address-input) for details.
 
 ## License
 

@@ -26,3 +26,34 @@ jobs:
         with:
           name: fuzzer-findings
           path: examples/rust-address-fuzzer/findings/
+
+  differential:
+    name: Differential detect/parse (TS vs Go vs Dart)
+    runs-on: ubuntu-latest
+    # Informational until the SDKs reach full parity: known divergences are
+    # reported and uploaded without blocking the PR.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - uses: dart-lang/setup-dart@v1
+      - run: pnpm install
+      - name: Run differential harness
+        run: node scripts/differential-fuzz.js --count 10000 --require-all
+
+      - name: Upload mismatch log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: differential-mismatches
+          path: examples/rust-address-fuzzer/findings/differential-mismatches.jsonl
+          if-no-files-found: ignore

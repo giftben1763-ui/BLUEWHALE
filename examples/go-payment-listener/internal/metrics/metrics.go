@@ -26,11 +26,23 @@ var (
 		},
 		[]string{"source"},
 	)
+
+	// PaymentUnroutableTotal counts payments that could not be credited to any
+	// user account (e.g. contract-sender deposits, invalid checksums, missing
+	// memos).  Exposed as stellar_payment_unroutable_total so that Alertmanager
+	// rules can fire on rate(stellar_payment_unroutable_total[5m]) > 5.
+	PaymentUnroutableTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "stellar_payment_unroutable_total",
+			Help: "Total number of payments that could not be routed to a user account.",
+		},
+	)
 )
 
 func Register() {
 	prometheus.MustRegister(PaymentsTotal)
 	prometheus.MustRegister(RoutingSourceTotal)
+	prometheus.MustRegister(PaymentUnroutableTotal)
 }
 
 // healthzHandler returns 200 OK with a JSON body as long as the process is running.

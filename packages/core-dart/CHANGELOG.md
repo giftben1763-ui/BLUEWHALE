@@ -1,21 +1,33 @@
-# Changelog
+# Changelog — bluewhale_core (Dart)
 
-## Unreleased
+All notable changes to this package are documented in this file.
 
-- Added `WarningSeverity` (`info`, `warn`, `error`) constants for comparing
-  `Warning.severity` / `RoutingWarning.severity`. The values are unchanged.
-- `bluewhale_core.dart` no longer leaks the internal `uint64Max` and
-  `digitsOnly` top-level helpers. Use `SafeRoutingId.uint64Max` instead.
-- Every public API now has Dartdoc, with examples for `detect`, `parse`,
-  `validate`, `extractRouting`, `extractRoutingSync`, `StellarAddress`, and
-  `MuxedAddress`. Corrected the `detect` examples, which used invalid
-  addresses. The `public_member_api_docs` lint is now enabled.
-- Added `benchmark/address_benchmark.dart`, which compares G and M parsing
-  throughput on the Dart VM and dart2js. Results are in `benchmark/README.md`.
-- Expanded `SafeRoutingId.tryParse` tests for malformed numeric input and
-  uint64 boundaries.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+Releases are coordinated with `spec/vectors.json` `spec_version`: see
+[Changelogs & release versioning](../../CONTRIBUTING.md#changelogs--release-versioning).
 
-## 1.1.0
+## [Unreleased]
+
+## [1.2.0] - 2026-09-24
+
+Implements spec `1.2.0`.
+
+### Added
+
+- `RoutingInput.minSeverityLevel` plus `WarningSeverity`, `severityOrder`,
+  `severityWeight` and `filterBySeverity` using the normative weights
+  `info = 0`, `warn = 1`, `error = 2`. `extractRoutingSync` / `extractRouting`
+  filter warnings by the threshold (default `info`).
+
+### Fixed
+
+- Contract senders (`C...` source account) now emit the spec warning code
+  `CONTRACT_SENDER_DETECTED` instead of `contract-sender`.
+
+## [1.1.0] - 2026-08-27
+
+### Added
 
 - **Flutter Web precision safety for 64-bit routing IDs.**
   - Added `SafeRoutingId`, a BigInt-backed wrapper that parses, validates,
@@ -36,7 +48,9 @@
     2^53-1, 2^53, 2^53+1, 2^63-1, 2^63, and 2^64-1 boundary IDs through
     memo extraction, muxed decode, and JSON serialization.
 
-## 1.0.0
+## [1.0.0] - 2026-04-23
+
+### Added
 
 - Initial release of the Bluewhale for Dart and Flutter.
 - Support for G, M, and C address detection and validation.
