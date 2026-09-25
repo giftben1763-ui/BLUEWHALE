@@ -82,6 +82,9 @@ func (l *PaymentListener) handlePayment(payment operations.Payment) {
 
 	switch severity {
 	case SeverityError:
+		// Increment the unroutable counter so Alertmanager can fire on
+		// rate(stellar_payment_unroutable_total[5m]) > 5.
+		metrics.PaymentUnroutableTotal.Inc()
 		event.Error().
 			Bool("alert", true).
 			Interface("error", result.DestinationError).
