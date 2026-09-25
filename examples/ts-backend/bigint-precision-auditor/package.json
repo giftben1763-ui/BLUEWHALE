@@ -2,6 +2,10 @@
   "name": "bigint-precision-auditor",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "start": "tsx src/main.ts",
+    "test": "tsx src/test.ts"
+  },
   "dependencies": {
     "@redishfish/bluewhale-core": "^1.0.1",
     "@stellar/stellar-sdk": "^12.3.0"
