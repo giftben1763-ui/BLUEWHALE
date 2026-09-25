@@ -46,6 +46,48 @@ func main() {
 }
 ```
 
+## Performance
+
+Run the benchmarks with:
+
+```bash
+go test ./address ./muxed ./routing -run '^$' -bench . -benchmem
+```
+
+Baseline numbers from Go 1.22.12 on an Intel Core i7-1185G7 (8 threads,
+Windows, amd64). A single run, so expect some noise:
+
+| Benchmark | ns/op | B/op | allocs/op |
+| --- | ---: | ---: | ---: |
+| `BenchmarkDetect_G` | 278 | 64 | 1 |
+| `BenchmarkDetect_M` | 339 | 80 | 1 |
+| `BenchmarkDetect_C` | 285 | 64 | 1 |
+| `BenchmarkParse_G` | 319 | 144 | 2 |
+| `BenchmarkParse_M` | 497 | 224 | 3 |
+| `BenchmarkParse_C` | 325 | 144 | 2 |
+| `BenchmarkParse_LowercaseG` | 426 | 208 | 3 |
+| `BenchmarkParse_BadChecksum` | 317 | 112 | 2 |
+| `BenchmarkParse_UnknownPrefix` | 39 | 48 | 1 |
+| `BenchmarkDecodeMuxed` | 464 | 144 | 2 |
+| `BenchmarkExtractRouting_GAddr_MemoID` | 435 | 288 | 4 |
+| `BenchmarkExtractRouting_GAddr_NoMemo` | 417 | 276 | 4 |
+| `BenchmarkExtractRouting_MAddr` | 767 | 320 | 6 |
+| `BenchmarkExtractRouting_GAddr_MemoID_Parallel` | 187 | 288 | 4 |
+| `BenchmarkExtractRouting_MAddr_Parallel` | 377 | 320 | 6 |
+
+Before the allocation work in `address/strkey.go` and `address/parse.go`,
+the same machine measured:
+
+| Benchmark | ns/op | allocs/op |
+| --- | ---: | ---: |
+| `BenchmarkDetect_G` | 349 | 3 |
+| `BenchmarkParse_G` | 444 | 4 |
+| `BenchmarkParse_M` | 1185 | 11 |
+| `BenchmarkParse_UnknownPrefix` | 532 | 8 |
+| `BenchmarkDecodeMuxed` | 623 | 7 |
+| `BenchmarkExtractRouting_GAddr_MemoID` | 560 | 6 |
+| `BenchmarkExtractRouting_MAddr` | 2304 | 21 |
+
 ## Examples
 
 ### Complete Payment Listener
