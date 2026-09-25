@@ -1,6 +1,12 @@
 name: bluewhale_core
 description: A robust Dart implementation of the Bluewhale, providing safe handling of G, M, and C addresses with cross-language specification compliance.
 version: 1.1.0
+# spec_version tracks alignment with spec/vectors.json (the normative
+# test-vector spec shared across all SDKs).  This must match the
+# spec_version field in spec/vectors.json and is checked by
+# scripts/check-vectors-sync.js.  Bump this whenever spec/vectors.json
+# spec_version is incremented.
+spec_version: 1.0.1
 repository: https://github.com/progidyken-hub/BLUEWHALE/tree/main/packages/core-dart
 
 environment:

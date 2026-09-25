@@ -42,11 +42,11 @@ Run `node scripts/generate-parity-matrix.js` to refresh it after adding a featur
 | Muxed address decoding | Decode an M-address back to G-address + uint64 ID | ✅ | ✅ | ✅ |
 | Routing extraction (`extractRouting`) | Resolve deposit routing ID from address + memo | ✅ | ✅ | ✅ |
 | Precision-safe routing ID (`SafeRoutingId`) | Lossless uint64 wrapper for JS/Flutter Web | ✅ | ✅ | ✅ |
-| Routing ID JSON as string | routingId serializes as a decimal string, never a raw integer | ✅ | ❌ | ✅ |
+| Routing ID JSON as string | routingId serializes as a decimal string, never a raw integer | ✅ | ✅ | ✅ |
 | Warning system | Structured, non-throwing warnings on edge cases | ✅ | ✅ | ✅ |
 | SEP-0029 memo requirement check | Flag when a destination account requires a routing memo | ✅ | ✅ | ✅ |
 | Spec test-vector runner | Consume vectors.json to validate implementation | ✅ | ✅ | ✅ |
 | URI / SEP-0007 routing extraction | Extract routing info from a SEP-0007 payment URI | ✅ | ❌ | ❌ |
 
-> **Parity summary:** TypeScript 12/12 · Go 10/12 · Dart/Flutter 9/12
+> **Parity summary:** TypeScript 12/12 · Go 11/12 · Dart/Flutter 9/12
 <!-- PARITY_MATRIX_END -->
