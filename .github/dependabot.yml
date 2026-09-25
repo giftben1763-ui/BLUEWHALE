@@ -1,0 +1,71 @@
+version: 2
+updates:
+  # npm / pnpm workspace (root + packages/core-ts, packages/bluewhale, examples)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      npm-all:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "javascript"
+
+  # Go module – core-go
+  - package-ecosystem: "gomod"
+    directory: "/packages/core-go"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      go-all:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "go"
+
+  # Dart / Flutter pub – core-dart
+  - package-ecosystem: "pub"
+    directory: "/packages/core-dart"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      dart-all:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "dart"
+
+  # Cargo – prism-core example (Rust)
+  - package-ecosystem: "cargo"
+    directory: "/examples/prism-core"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      cargo-all:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "rust"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    groups:
+      actions-all:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "github-actions"

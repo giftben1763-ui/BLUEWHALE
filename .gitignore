@@ -57,3 +57,6 @@ fuzz/artifacts/
 *.user
 .DS_Store
 Thumbs.db
+
+# ─── Fuzzer findings ─────────────────────────────────────────────────────────
+examples/rust-address-fuzzer/findings/

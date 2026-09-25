@@ -1,4 +1,4 @@
-module github.com/progidyken-hub/BLUEWHALE/packages/core-go
+module github.com/REDISHFISH/BLUEWHALE/packages/core-go
 
 go 1.22
 

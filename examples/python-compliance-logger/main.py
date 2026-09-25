@@ -6,13 +6,16 @@ output CSV, then prints a formatted summary to stderr.
 
 Input CSV columns : address, memo_type (optional), memo_value (optional)
 Output CSV columns: address, memo_type, memo_value, address_type, risk_label, notes
+
+Pass --json to also print a machine-readable JSON compliance log to stdout.
 """
 import csv
+import json
 import sys
 import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
-from reporter import print_summary
+from reporter import build_report, print_summary
 
 
 def classify(address: str, memo_type: str, memo_value: str) -> dict:
@@ -88,14 +91,19 @@ def process(input_path: str, output_path: str) -> list[dict]:
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        print(f"Usage: {sys.argv[0]} <input.csv> <output.csv>", file=sys.stderr)
+    args = sys.argv[1:]
+    emit_json = "--json" in args
+    paths = [a for a in args if a != "--json"]
+    if len(paths) != 2:
+        print(f"Usage: {sys.argv[0]} [--json] <input.csv> <output.csv>", file=sys.stderr)
         sys.exit(1)
 
-    input_path, output_path = sys.argv[1], sys.argv[2]
+    input_path, output_path = paths
     rows = process(input_path, output_path)
     print(f"Wrote {len(rows)} rows to {output_path}", file=sys.stderr)
     print_summary(rows)
+    if emit_json:
+        print(json.dumps(build_report(rows), indent=2))
 
 
 if __name__ == "__main__":

@@ -134,6 +134,60 @@ describe("C-address – zero-throw policy (#77)", () => {
   });
 });
 
+// ─── 3b. CONTRACT_SENDER_DETECTED (contract source account) ──────────────────
+//
+// When the *sender* is a Soroban contract, routing state is cleared and a
+// CONTRACT_SENDER_DETECTED info warning is returned (parity with Go and Dart).
+
+describe("CONTRACT_SENDER_DETECTED – contract source account", () => {
+  const C_SOURCE = "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+  const expected: RoutingResult = {
+    destinationBaseAccount: null,
+    routingId: null,
+    routingSource: "none",
+    warnings: [
+      {
+        code: "CONTRACT_SENDER_DETECTED",
+        severity: "info",
+        message: "Contract source detected. Routing state cleared.",
+      },
+    ],
+  };
+
+  it("clears routing state for a G destination with a memo", () => {
+    const result = extractRouting({
+      ...input(G_ADDRESS, "id", "100"),
+      sourceAccount: C_SOURCE,
+    });
+    expect(result).toEqual(expected);
+  });
+
+  it("clears routing state for an M destination", () => {
+    const result = extractRouting({
+      ...input(M_ADDRESS),
+      sourceAccount: C_SOURCE,
+    });
+    expect(result).toEqual(expected);
+  });
+
+  it("does not trigger for a G source account", () => {
+    const result = extractRouting({
+      ...input(G_ADDRESS, "id", "100"),
+      sourceAccount: G_ADDRESS,
+    });
+    expect(result.routingSource).toBe("memo");
+    expect(result.routingId).toBe("100");
+  });
+
+  it("ignores an unparseable source account", () => {
+    const result = extractRouting({
+      ...input(G_ADDRESS, "id", "100"),
+      sourceAccount: "CNOTAVALIDCONTRACT",
+    });
+    expect(result.routingSource).toBe("memo");
+  });
+});
+
 // ─── 4. MEMO_ID_INVALID_FORMAT ────────────────────────────────────────────────
 
 describe("MEMO_ID_INVALID_FORMAT warning", () => {

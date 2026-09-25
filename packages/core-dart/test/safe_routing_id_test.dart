@@ -83,6 +83,80 @@ void main() {
     });
   });
 
+  group('SafeRoutingId.tryParse never throws on malformed input', () {
+    // The families this issue names — blank, `'0x123'`, `'1e10'`, whitespace —
+    // plus the neighbouring forms a MEMO_ID really arrives in: from a URI, a
+    // JSON payload, a hand-edited config, or a copy-paste out of a table.
+    const malformed = <String>[
+      // blank and whitespace (ASCII and not)
+      '', ' ', '\t', '\n', '\u00a0', ' 42', '42 ', '4 2', '42\t',
+      // radix prefixes and digit separators
+      '0x123', '0X1F', '0b1010', '0o17', '0d42', '#10', '1_000', '1,000',
+      // exponent and fractional notation
+      '1e10', '1E10', '1e+10', '1.5', '1.', '.5', '0.0', '1.0e3',
+      // signs
+      '-1', '+1', '--1', '+-1', '-0', '+0', '1-',
+      // non-ASCII digits must not slip past the decimal check
+      '٢٣', '۱۲۳', '１２３', '²³', 'Ⅳ',
+      // words, null-likes, and a bare prefix
+      'null', 'NaN', 'Infinity', 'fourty', '0x',
+      // out of uint64 range
+      '18446744073709551616', '99999999999999999999999999999999999999999',
+    ];
+
+    for (final input in malformed) {
+      test('"$input" → tryParse null, parse FormatException naming the input',
+          () {
+        expect(SafeRoutingId.tryParse(input), isNull,
+            reason: 'tryParse must return null for "$input" instead of throwing');
+        expect(
+          () => SafeRoutingId.parse(input),
+          throwsA(predicate(
+              (Object e) => e is FormatException && e.source == input)),
+          reason: 'parse must reject "$input" and carry it as the source',
+        );
+      });
+    }
+
+    test('the whole corpus is rejected without a single throw', () {
+      for (final input in malformed) {
+        expect(() => SafeRoutingId.tryParse(input), returnsNormally,
+            reason: 'tryParse threw on "$input"');
+      }
+    });
+  });
+
+  group('SafeRoutingId round-trip invariant', () {
+    test('every accepted input re-parses to an equal id', () {
+      const corpus = <String>[
+        ...boundaryVectors,
+        '1',
+        '007',
+        '000',
+        '000000000000000000000000000001',
+        // Malformed families are in the same corpus to prove the check is
+        // one-sided: they are simply skipped, never accepted by accident.
+        '',
+        '0x123',
+        '1e10',
+        ' ',
+        '٤٢',
+      ];
+
+      for (final input in corpus) {
+        final id = SafeRoutingId.tryParse(input);
+        if (id == null) continue;
+
+        final again = SafeRoutingId.tryParse(id.value);
+        expect(again, equals(id),
+            reason: 'canonical form of "$input" did not re-parse to an equal id');
+        expect(again!.toBigInt, equals(id.toBigInt));
+        expect(BigInt.parse(id.value), equals(id.toBigInt));
+        expect(SafeRoutingId.parse(id.value), equals(id));
+      }
+    });
+  });
+
   group('SafeRoutingId.fromBigInt', () {
     test('round-trips every boundary vector', () {
       for (final idText in boundaryVectors) {

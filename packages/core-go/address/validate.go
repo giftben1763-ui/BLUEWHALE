@@ -24,4 +24,3 @@ func Validate(addr string, kinds ...AddressKind) bool {
 
 	return false
 }
-

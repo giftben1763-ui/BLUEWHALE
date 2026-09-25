@@ -8,7 +8,18 @@
 //! cargo run --features diff --bin prism-diff -- --random 10000
 //! cargo run --features diff --bin prism-diff -- --corpus path/to/inputs.txt
 //! cargo run --features diff --bin prism-diff -- --stdin
+//! cargo run --features diff --bin prism-diff -- --random 100 --json
 //! ```
+//!
+//! ## JSON output format (`--json`)
+//! When `--json` is supplied every **accepted** address is written to stdout as a
+//! newline-delimited JSON object (JSON-ND / ndjson):
+//! ```json
+//! {"input":"GA7QYN...","kind":"G","payload_hex":"0612...","checksum_hex":"ab3f","muxed_id":null,"base_g":null}
+//! {"input":"MA7QYN...","kind":"M","payload_hex":"6012...","checksum_hex":"11cc","muxed_id":123,"base_g":"GA7QYN..."}
+//! ```
+//! Divergences and statistics are still printed to **stderr** so they do not
+//! pollute the JSON stream.
 
 use std::io::{self, BufRead};
 use std::path::PathBuf;
@@ -51,6 +62,13 @@ struct Cli {
     /// Print every comparison, not just divergences
     #[arg(long, short)]
     verbose: bool,
+
+    /// Emit accepted addresses as newline-delimited JSON to stdout.
+    /// Each line contains: input, kind, payload_hex, checksum_hex,
+    /// muxed_id (null for G/C), and base_g (null for G/C).
+    /// Divergence reports and summary statistics continue to go to stderr.
+    #[arg(long)]
+    json: bool,
 }
 
 // ─── Statistics ─────────────────────────────────────────────────────────────
@@ -106,11 +124,11 @@ fn main() {
     }
 
     let stats = if let Some(n) = cli.random {
-        run_random(&mut rng, n, cli.verbose)
+        run_random(&mut rng, n, cli.verbose, cli.json)
     } else if let Some(path) = cli.corpus {
-        run_corpus(&path, cli.verbose)
+        run_corpus(&path, cli.verbose, cli.json)
     } else {
-        run_stdin(cli.verbose)
+        run_stdin(cli.verbose, cli.json)
     };
 
     eprintln!();
@@ -134,37 +152,37 @@ fn main() {
 
 // ─── Input sources ──────────────────────────────────────────────────────────
 
-fn run_random(rng: &mut StdRng, n: usize, verbose: bool) -> Stats {
+fn run_random(rng: &mut StdRng, n: usize, verbose: bool, json: bool) -> Stats {
     let mut stats = Stats::default();
     for _ in 0..n {
-        diff_one(&random_string(rng), verbose, &mut stats);
+        diff_one(&random_string(rng), verbose, json, &mut stats);
     }
     stats
 }
 
-fn run_corpus(path: &PathBuf, verbose: bool) -> Stats {
+fn run_corpus(path: &PathBuf, verbose: bool, json: bool) -> Stats {
     let file = std::fs::File::open(path).unwrap_or_else(|e| {
         eprintln!("error: cannot open corpus file {}: {e}", path.display());
         std::process::exit(2);
     });
     let mut stats = Stats::default();
     for line in io::BufReader::new(file).lines() {
-        diff_one(&line.unwrap_or_default(), verbose, &mut stats);
+        diff_one(&line.unwrap_or_default(), verbose, json, &mut stats);
     }
     stats
 }
 
-fn run_stdin(verbose: bool) -> Stats {
+fn run_stdin(verbose: bool, json: bool) -> Stats {
     let mut stats = Stats::default();
     for line in io::stdin().lock().lines() {
-        diff_one(&line.unwrap_or_default(), verbose, &mut stats);
+        diff_one(&line.unwrap_or_default(), verbose, json, &mut stats);
     }
     stats
 }
 
 // ─── Core comparison logic ──────────────────────────────────────────────────
 
-fn diff_one(input: &str, verbose: bool, stats: &mut Stats) {
+fn diff_one(input: &str, verbose: bool, json: bool, stats: &mut Stats) {
     stats.total += 1;
 
     let prism = address::parse(input);
@@ -255,8 +273,119 @@ fn diff_one(input: &str, verbose: bool, stats: &mut Stats) {
         if verbose {
             eprintln!("AGREE accept  ← {input:?}");
         }
+        // ── JSON output ──────────────────────────────────────────────
+        // When --json is active, emit one JSON-ND record per accepted address
+        // to stdout.  Stderr is used for all diagnostics so that downstream
+        // tools can pipe this output directly without filtering noise.
+        if json {
+            print_json_record(input, &prism_addr);
+        }
     }
 }
+
+// ─── JSON record emission ────────────────────────────────────────────────────
+
+/// Decode the raw base-32 string back to bytes so we can extract the payload
+/// and the 2-byte CRC-16 checksum independently.
+fn decode_raw_bytes(raw: &str) -> Vec<u8> {
+    let s = raw.as_bytes();
+    let mut bits: u32 = 0;
+    let mut bit_count: u32 = 0;
+    let mut output = Vec::with_capacity(s.len() * 5 / 8);
+    for &ch in s {
+        let val: u8 = match ch {
+            b'A'..=b'Z' => ch - b'A',
+            b'2'..=b'7' => ch - b'2' + 26,
+            _ => continue,
+        };
+        bits = (bits << 5) | (val as u32);
+        bit_count += 5;
+        if bit_count >= 8 {
+            bit_count -= 8;
+            output.push((bits >> bit_count) as u8);
+            bits &= (1 << bit_count) - 1;
+        }
+    }
+    output
+}
+
+/// Escape a string for embedding in a JSON value (no external crate needed).
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    out.push('"');
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => {
+                out.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// Emit a single JSON-ND record for an accepted address to **stdout**.
+///
+/// Format:
+/// ```json
+/// {
+///   "input": "GA7QYN...",
+///   "kind": "G",
+///   "payload_hex": "0612ab...",
+///   "checksum_hex": "3fab",
+///   "muxed_id": null,
+///   "base_g": null
+/// }
+/// ```
+/// `payload_hex` is the version byte + key bytes (everything before the
+/// 2-byte checksum).  `checksum_hex` is those final 2 bytes in hex.
+fn print_json_record(input: &str, addr: &address::Address) {
+    let decoded = decode_raw_bytes(addr.raw());
+
+    let (payload_bytes, checksum_bytes) = if decoded.len() >= 2 {
+        let split = decoded.len() - 2;
+        (&decoded[..split], &decoded[split..])
+    } else {
+        (decoded.as_slice(), &[] as &[u8])
+    };
+
+    let payload_hex: String = payload_bytes.iter().map(|b| format!("{b:02x}")).collect();
+    let checksum_hex: String = checksum_bytes.iter().map(|b| format!("{b:02x}")).collect();
+
+    let kind_str = match addr.kind() {
+        AddressKind::G => "G",
+        AddressKind::M => "M",
+        AddressKind::C => "C",
+    };
+
+    let muxed_id_json = match addr.muxed_id() {
+        Some(id) => id.to_string(),
+        None => "null".to_string(),
+    };
+
+    let base_g_json = match addr.base_g() {
+        Some(g) => json_escape(g),
+        None => "null".to_string(),
+    };
+
+    println!(
+        "{{\"input\":{input_json},\"kind\":\"{kind}\",\"payload_hex\":\"{payload}\",\"checksum_hex\":\"{checksum}\",\"muxed_id\":{muxed},\"base_g\":{base_g}}}",
+        input_json = json_escape(input),
+        kind = kind_str,
+        payload = payload_hex,
+        checksum = checksum_hex,
+        muxed = muxed_id_json,
+        base_g = base_g_json,
+    );
+}
+
+// ─── Field comparison ────────────────────────────────────────────────────────
 
 /// Compare the decoded fields of a prism-core `Address` and a `stellar-strkey`
 /// `Strkey`. Returns `None` if they agree, or a description string if they

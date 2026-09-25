@@ -4,7 +4,7 @@ The Dart/Flutter implementation of the Bluewhale for mobile and web wallet routi
 
 ```yaml
 dependencies:
-  bluewhale_core: ^1.0.1
+  bluewhale_core: ^1.2.0
 ```
 
 Part of a multi-language suite also available in **[TypeScript](https://github.com/REDISHFISH/BLUEWHALE/tree/main/packages/core-ts)** and **[Go](https://github.com/REDISHFISH/BLUEWHALE/tree/main/packages/core-go)**.

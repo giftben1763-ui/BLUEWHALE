@@ -1,0 +1,61 @@
+---
+title: "React Address Input"
+description: "Drop-in React components for Stellar deposit address forms."
+icon: "react"
+---
+
+`@redishfish/bluewhale` provides React UI components that help users enter Stellar destination addresses correctly. It detects the address type as the user types, only shows a memo field when one is meaningful, and surfaces warnings for unsafe destinations.
+
+## Installation
+
+```bash
+npm install @redishfish/bluewhale react
+```
+
+<Info>
+  `react` (>= 17) is a peer dependency.
+</Info>
+
+## Quick Start
+
+```tsx
+import { AddressInput } from "@redishfish/bluewhale";
+
+export function WithdrawForm() {
+  return (
+    <form>
+      <label>Destination</label>
+      <AddressInput />
+    </form>
+  );
+}
+```
+
+`AddressInput` behaves as follows:
+
+| Input | Badge | Memo field | Warning |
+| --- | --- | --- | --- |
+| `G...` (classic) | `G` | Shown | — |
+| `M...` (muxed) | `M` | Hidden (routing ID is embedded) | — |
+| `C...` (contract) | `C` | Hidden | Contract addresses cannot be used for standard payments |
+
+## Building Blocks
+
+The individual pieces are exported so you can compose your own layout:
+
+```tsx
+import { TypeBadge, MemoField, WarningList } from "@redishfish/bluewhale";
+import type { AddressType } from "@redishfish/bluewhale";
+
+<TypeBadge type={"G" as AddressType} />
+<MemoField isVisible value={memo} onChange={setMemo} />
+<WarningList warnings={["Numeric MEMO_TEXT should be MEMO_ID."]} />
+```
+
+| Component | Props |
+| --- | --- |
+| `TypeBadge` | `type: "G" \| "M" \| "C" \| "UNKNOWN"` |
+| `MemoField` | `isVisible: boolean`, `value: string`, `onChange: (value: string) => void` |
+| `WarningList` | `warnings: string[]` |
+
+For backend-grade routing extraction (muxed ID decoding, memo reconciliation, precision warnings), pair these components with [`@redishfish/bluewhale-core`](/docs/api-reference/extract-routing).

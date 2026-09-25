@@ -141,3 +141,32 @@ func BenchmarkExtractRouting_MAddr_Parallel(b *testing.B) {
 		}
 	})
 }
+
+// BenchmarkExtractRouting_LowercaseGAddr benchmarks a non-canonical (lowercase)
+// G-address, which forces one uppercase conversion.
+func BenchmarkExtractRouting_LowercaseGAddr(b *testing.B) {
+	b.ReportAllocs()
+	input := RoutingInput{
+		Destination: "gaycuyt553c5lhve2xpw5gmejt4bxgm7ahmjwlapzp53kjo7eiqadrsi",
+		MemoType:    "id",
+		MemoValue:   "100",
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ExtractRouting(input)
+	}
+}
+
+// BenchmarkExtractRouting_InvalidDestination benchmarks the validation-failure
+// path for a destination with a bad checksum.
+func BenchmarkExtractRouting_InvalidDestination(b *testing.B) {
+	b.ReportAllocs()
+	input := RoutingInput{
+		Destination: benchGAddr[:len(benchGAddr)-1] + "J",
+		MemoType:    "none",
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = ExtractRouting(input)
+	}
+}
