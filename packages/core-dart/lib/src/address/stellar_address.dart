@@ -5,6 +5,18 @@ import 'codes.dart';
 import 'detect.dart';
 
 /// An immutable representation of a Stellar Address.
+///
+/// Use [StellarAddress.parse] when invalid input is exceptional; use
+/// [detect] or `parse` when you want a non-throwing check.
+///
+/// ```dart
+/// final address = StellarAddress.parse(
+///   'MAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQACAAAAAAAAAAAAD672',
+/// );
+/// address.kind;    // AddressKind.m
+/// address.baseG;   // 'GAYCUYT553C5…ADRSI'
+/// address.muxedId; // BigInt.zero
+/// ```
 @immutable
 class StellarAddress {
   /// The specific kind of address (g, m, or c).

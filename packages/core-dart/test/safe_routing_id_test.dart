@@ -83,6 +83,103 @@ void main() {
     });
   });
 
+  group('SafeRoutingId.tryParse numeric edge cases', () {
+    final two = BigInt.two;
+
+    /// Malformed inputs grouped by category. Each must yield `null` from
+    /// both [SafeRoutingId.tryParse] and [SafeRoutingId.tryParseStrict]
+    /// without throwing.
+    const malformed = <String, List<String>>{
+      'empty': [''],
+      'whitespace only': [' ', '   ', '\t', '\n', '\r\n', ' '],
+      'surrounding whitespace': [
+        ' 123', '123 ', ' 123 ', '\t123', '123\n', '\n123\r\n', ' 123',
+      ],
+      'inner whitespace': ['1 23', '1\t23', '12\n3'],
+      'hexadecimal prefix': ['0x123', '0X123', '0x', '0xFF', '0x0', '-0x1'],
+      'other radix prefixes': ['0b101', '0o17', '0B1', '0O7'],
+      'scientific notation': [
+        '1e10', '1E10', '1e+10', '1e-10', '1.5e3', 'e10', '1e', '9e18',
+      ],
+      'decimal point': ['1.', '.1', '1.0', '0.0', '18446744073709551615.0'],
+      'signs': ['-0', '+0', '-1', '+1', '--1', '−1'],
+      'non-ASCII digits': ['١٢٣', '１２３', '१'],
+      'special values': ['NaN', 'Infinity', '-Infinity', 'null'],
+      'trailing garbage': ['123abc', 'abc123', '12_3', '1,000'],
+    };
+
+    malformed.forEach((category, inputs) {
+      test('$category returns null without throwing', () {
+        for (final input in inputs) {
+          final escaped = Uri.encodeComponent(input);
+          expect(() => SafeRoutingId.tryParse(input), returnsNormally,
+              reason: 'tryParse("$escaped") must not throw.');
+          expect(SafeRoutingId.tryParse(input), isNull,
+              reason: 'tryParse("$escaped") must return null.');
+          expect(() => SafeRoutingId.tryParseStrict(input), returnsNormally,
+              reason: 'tryParseStrict("$escaped") must not throw.');
+          expect(SafeRoutingId.tryParseStrict(input), isNull,
+              reason: 'tryParseStrict("$escaped") must return null.');
+        }
+      });
+    });
+
+    test('very long inputs return null without throwing', () {
+      final hugeDigits = '9' * 10000;
+      final hugeGarbage = 'x' * 10000;
+      expect(SafeRoutingId.tryParse(hugeDigits), isNull);
+      expect(SafeRoutingId.tryParse(hugeGarbage), isNull);
+    });
+
+    test('long runs of leading zeros normalize (lenient) or reject (strict)',
+        () {
+      final padded = '${'0' * 100}18446744073709551615';
+      expect(SafeRoutingId.tryParse(padded)?.value,
+          equals('18446744073709551615'));
+      expect(SafeRoutingId.tryParseStrict(padded), isNull);
+      expect(SafeRoutingId.tryParse('0' * 50)?.value, equals('0'));
+    });
+
+    final boundaries = <String, BigInt>{
+      '0': BigInt.zero,
+      '2^53 - 1': two.pow(53) - BigInt.one,
+      '2^53': two.pow(53),
+      '2^64 - 1': two.pow(64) - BigInt.one,
+    };
+
+    boundaries.forEach((label, expected) {
+      test('boundary $label parses to the exact value', () {
+        final text = expected.toString();
+        final lenient = SafeRoutingId.tryParse(text);
+        final strict = SafeRoutingId.tryParseStrict(text);
+        expect(lenient, isNotNull);
+        expect(lenient!.toBigInt, equals(expected));
+        expect(lenient.value, equals(text));
+        expect(strict, equals(lenient));
+      });
+    });
+
+    test('boundary constants match their computed values', () {
+      expect(SafeRoutingId.maxJsSafeInteger,
+          equals(boundaries['2^53 - 1']));
+      expect(SafeRoutingId.uint64Max, equals(boundaries['2^64 - 1']));
+    });
+
+    test('JS-safety flips exactly between 2^53 - 1 and 2^53', () {
+      expect(SafeRoutingId.tryParse(boundaries['2^53 - 1'].toString())!.isJsSafe,
+          isTrue);
+      expect(SafeRoutingId.tryParse(boundaries['2^53'].toString())!.isJsSafe,
+          isFalse);
+    });
+
+    test('2^64 is the first value rejected', () {
+      final overflow = two.pow(64).toString();
+      expect(overflow, equals('18446744073709551616'));
+      expect(SafeRoutingId.tryParse(overflow), isNull);
+      expect(SafeRoutingId.tryParseStrict(overflow), isNull);
+    });
+  });
+
   group('SafeRoutingId.fromBigInt', () {
     test('round-trips every boundary vector', () {
       for (final idText in boundaryVectors) {

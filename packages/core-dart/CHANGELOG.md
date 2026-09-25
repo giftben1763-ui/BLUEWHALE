@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+- Added `WarningSeverity` (`info`, `warn`, `error`) constants for comparing
+  `Warning.severity` / `RoutingWarning.severity`. The values are unchanged.
+- `bluewhale_core.dart` no longer leaks the internal `uint64Max` and
+  `digitsOnly` top-level helpers. Use `SafeRoutingId.uint64Max` instead.
+- Every public API now has Dartdoc, with examples for `detect`, `parse`,
+  `validate`, `extractRouting`, `extractRoutingSync`, `StellarAddress`, and
+  `MuxedAddress`. Corrected the `detect` examples, which used invalid
+  addresses. The `public_member_api_docs` lint is now enabled.
+- Added `benchmark/address_benchmark.dart`, which compares G and M parsing
+  throughput on the Dart VM and dart2js. Results are in `benchmark/README.md`.
+- Expanded `SafeRoutingId.tryParse` tests for malformed numeric input and
+  uint64 boundaries.
+
 ## 1.1.0
 
 - **Flutter Web precision safety for 64-bit routing IDs.**

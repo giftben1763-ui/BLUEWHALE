@@ -1,7 +1,17 @@
 import 'dart:typed_data';
 import '../util/strkey.dart';
 
+/// Low-level encoder for muxed (`M…`) StrKey strings.
+///
+/// Most callers should use `MuxedAddress.encode`, which accepts a `G…`
+/// address and validates the ID range before delegating here.
 class MuxedEncoder {
+  /// Encodes a raw 32-byte Ed25519 public key and a 64-bit [id] into an
+  /// `M…` address.
+  ///
+  /// Throws [ArgumentError] if [ed25519] is not exactly 32 bytes. [id] is
+  /// written as big-endian uint64; callers are responsible for keeping it
+  /// within `0..2^64 - 1`.
   static String encodeMuxed(List<int> ed25519, BigInt id) {
     if (ed25519.length != 32) {
       throw ArgumentError('ED25519 public key must be 32 bytes');

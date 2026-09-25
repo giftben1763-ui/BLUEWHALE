@@ -1,8 +1,14 @@
 import 'dart:typed_data';
 
+/// Base32 and CRC-16 primitives for Stellar StrKey encoding.
+///
+/// Internal: this class is not exported from `bluewhale_core.dart`.
 class StrKeyUtil {
   static const String _alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
+  /// Decodes an unpadded RFC 4648 Base32 string (case-insensitive).
+  ///
+  /// Throws [FormatException] on characters outside the Base32 alphabet.
   static Uint8List decodeBase32(String input) {
     input = input.toUpperCase().replaceAll('=', '');
     final charCount = input.length;
@@ -36,6 +42,7 @@ class StrKeyUtil {
     return result;
   }
 
+  /// Encodes [data] as unpadded, uppercase RFC 4648 Base32.
   static String encodeBase32(Uint8List data) {
     final result = StringBuffer();
 
@@ -58,6 +65,9 @@ class StrKeyUtil {
     return result.toString();
   }
 
+  /// Computes the CRC-16/XMODEM checksum of [bytes].
+  ///
+  /// StrKey stores the result little-endian after the payload.
   static int calculateChecksum(Uint8List bytes) {
     int crc = 0x0000;
     for (int byte in bytes) {

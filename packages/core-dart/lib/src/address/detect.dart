@@ -86,15 +86,16 @@ import '../util/strkey.dart';
 ///
 /// ```dart
 /// // Classic G address — returns AddressKind.g
-/// final g = detect('GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN');
+/// final g = detect('GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI');
 /// assert(g == AddressKind.g);
 ///
 /// // Muxed M address — returns AddressKind.m
-/// final m = detect('MA7QYNF7SOWQ3GLR2BGMZEHXR7HGCLSQSKMFYZ8ITCOMBKS5HVJBCAQV4JDPROD7DAQ');
+/// final m = detect(
+///     'MAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQACAAAAAAAAAAAAD672');
 /// assert(m == AddressKind.m);
 ///
 /// // Contract C address — structurally valid, INVALID_DESTINATION only in routing
-/// final c = detect('CA7QYNF7SOWQ3GLR2BGMZEHXR7HGCLSQSKMFYZ8ITCOMBKS5HVJBAQLCD');
+/// final c = detect('CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC');
 /// assert(c == AddressKind.c);
 ///
 /// // Empty input — returns null
@@ -104,11 +105,11 @@ import '../util/strkey.dart';
 /// assert(detect('NOTANADDRESS') == null);
 ///
 /// // Lowercase input — prefix check is case-insensitive, still classifies correctly
-/// final lower = detect('gaazi4tcr3ty5ojhctjc2a4qsy6cjwjh5iajtgkin2er7lbnvkoccwn');
+/// final lower = detect('gaycuyt553c5lhve2xpw5gmejt4bxgm7ahmjwlapzp53kjo7eiqadrsi');
 /// assert(lower == AddressKind.g);
 ///
 /// // Tampered checksum — returns null
-/// assert(detect('GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWX') == null);
+/// assert(detect('GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSJ') == null);
 /// ```
 ///
 /// ---

@@ -68,6 +68,31 @@ abstract final class WarningCode {
   static const invalidDestination = 'INVALID_DESTINATION';
 }
 
+/// Severity levels carried by [Warning.severity] and `RoutingWarning.severity`.
+///
+/// Severities are plain strings so they serialize identically to the
+/// TypeScript and Go implementations; compare against these constants rather
+/// than hard-coding the literals.
+///
+/// ```dart
+/// final result = extractRoutingSync(input);
+/// final blocking = result.warnings
+///     .where((w) => w.severity == WarningSeverity.error);
+/// ```
+abstract final class WarningSeverity {
+  /// Informational only; no action is required.
+  static const info = 'info';
+
+  /// The input was accepted, but should be reviewed or normalized.
+  static const warn = 'warn';
+
+  /// The payment should not be credited automatically.
+  static const error = 'error';
+
+  /// All severities, ordered from least to most severe.
+  static const values = [info, warn, error];
+}
+
 /// Represents a warning encountered during address parsing or routing.
 class Warning {
   /// The [WarningCode] identifying the type of warning.
@@ -76,7 +101,7 @@ class Warning {
   /// A human-readable description of the warning.
   final String message;
 
-  /// The severity of the warning (info, warn, error).
+  /// The [WarningSeverity] of the warning (`info`, `warn`, or `error`).
   final String severity;
 
   /// Optional normalization payload if the input was non-canonical.
@@ -85,6 +110,7 @@ class Warning {
   /// Optional context providing additional details about the warning.
   final WarningContext? context;
 
+  /// Creates a warning; [normalization] and [context] are optional.
   Warning({
     required this.code,
     required this.message,
@@ -102,6 +128,7 @@ class Normalization {
   /// The normalized canonical representation.
   final String normalized;
 
+  /// Records that [original] was rewritten to [normalized].
   Normalization({required this.original, required this.normalized});
 }
 
@@ -113,6 +140,7 @@ class WarningContext {
   /// The type of memo provided in the transaction.
   final String? memoType;
 
+  /// Creates a context; every field is optional.
   WarningContext({this.destinationKind, this.memoType});
 }
 
@@ -130,6 +158,7 @@ class ParseResult {
   /// Details of the error if [kind] is null.
   final AddressError? error;
 
+  /// Creates a parse result. [error] is set if and only if [kind] is null.
   ParseResult({
     this.kind,
     required this.address,
@@ -149,6 +178,7 @@ class AddressError {
   /// A human-readable error message.
   final String message;
 
+  /// Creates an error describing why [input] failed to parse.
   AddressError({
     required this.code,
     required this.input,

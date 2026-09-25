@@ -13,3 +13,4 @@ linter:
     - always_declare_return_types
     - prefer_const_constructors
     - unawaited_futures
+    - public_member_api_docs

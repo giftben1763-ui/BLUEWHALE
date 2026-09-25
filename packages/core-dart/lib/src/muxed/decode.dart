@@ -3,7 +3,18 @@ import '../util/strkey.dart';
 import 'decoded_muxed_address.dart';
 import '../exceptions.dart';
 
+/// Low-level decoder for muxed (`M…`) StrKey strings.
+///
+/// Most callers should use `MuxedAddress.decode`, which wraps this and
+/// normalizes every failure into a [StellarAddressException].
 class MuxedDecoder {
+  /// Decodes [mAddress] into its base `G…` account and uint64 ID.
+  ///
+  /// Throws [StellarAddressException] if the decoded payload is not 43 bytes
+  /// or does not carry the muxed version byte (`0x60`), and a
+  /// [FormatException] if [mAddress] contains non-Base32 characters. The
+  /// CRC-16 checksum is **not** verified here; call `detect` first when the
+  /// input is untrusted.
   static DecodedMuxedAddress decodeMuxedString(String mAddress) {
     final decoded = StrKeyUtil.decodeBase32(mAddress);
     
