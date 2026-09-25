@@ -49,6 +49,23 @@ func (r *RoutingID) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON serializes the routing ID as a JSON quoted decimal string
+// (e.g. "18446744073709551615") rather than a bare integer literal.
+//
+// This is intentional: JavaScript clients and Flutter Web both represent
+// numbers as IEEE-754 doubles, which can only hold integers exactly up to
+// 2^53-1 (Number.MAX_SAFE_INTEGER = 9007199254740991).  Stellar M-address
+// IDs may be up to 2^64-1, so emitting a bare integer would silently
+// corrupt any ID above that boundary when parsed by a JS or Dart-Web
+// client.  A quoted string forces the receiver to use BigInt / BigInt
+// parsing and keeps the full uint64 precision intact.
+func (r RoutingID) MarshalJSON() ([]byte, error) {
+	if r.raw == "" {
+		return []byte("null"), nil
+	}
+	return json.Marshal(r.raw)
+}
+
 func (r *RoutingID) String() string {
 	if r == nil {
 		return ""
