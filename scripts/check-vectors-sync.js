@@ -77,3 +77,38 @@ if (errors.length > 0) {
 }
 
 console.log("All packages are in sync with spec_version: " + specVersion);
+
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Extracts the value of a top-level YAML key from a YAML string without
+ * pulling in a runtime YAML dependency.
+ *
+ * Only handles simple scalar values on the same line as the key
+ * (e.g. `spec_version: 1.0.1`).  Returns null if the key is not found.
+ *
+ * @param {string} content - Full YAML file content.
+ * @param {string} key     - Top-level key name to look for.
+ * @returns {string|null}
+ */
+function extractYamlTopLevelValue(content, key) {
+  // Match lines like:  key: value   or  key: "value"  or  key: '1.0.1'
+  // The caret (^) ensures only top-level keys (no leading spaces) match.
+  const re = new RegExp(
+    "^" + escapeRegExp(key) + ":\\s*[\"']?([^\"'#\\r\\n]+)[\"']?",
+    "m"
+  );
+  const match = content.match(re);
+  if (!match) return null;
+  return match[1].trim();
+}
+
+/**
+ * Escapes a string for safe use in a RegExp literal.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}

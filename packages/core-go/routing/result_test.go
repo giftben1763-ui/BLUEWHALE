@@ -7,6 +7,147 @@ import (
 	"github.com/REDISHFISH/BLUEWHALE/packages/core-go/address"
 )
 
+// ─── MarshalJSON ──────────────────────────────────────────────────────────────
+//
+// routingId MUST serialize as a JSON quoted decimal string, never as a raw
+// integer literal.  JavaScript and Flutter Web represent numbers as IEEE-754
+// doubles, which silently truncate integers above 2^53-1
+// (Number.MAX_SAFE_INTEGER = 9007199254740991).  Muxed-account IDs are uint64
+// and may legally reach 2^64-1, so a bare number would corrupt large IDs on
+// those platforms.
+
+func TestRoutingIDMarshalJSONEmitsQuotedDecimalString(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		id   RoutingID
+		want string
+	}{
+		{
+			name: "zero",
+			id:   RoutingID{raw: "0"},
+			want: `"0"`,
+		},
+		{
+			name: "small value",
+			id:   RoutingID{raw: "12345"},
+			want: `"12345"`,
+		},
+		{
+			name: "above JS MAX_SAFE_INTEGER (2^53+1)",
+			id:   RoutingID{raw: "9007199254740993"},
+			want: `"9007199254740993"`,
+		},
+		{
+			name: "uint64 max",
+			id:   RoutingID{raw: "18446744073709551615"},
+			want: `"18446744073709551615"`,
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := tc.id.MarshalJSON()
+			if err != nil {
+				t.Fatalf("MarshalJSON() error = %v", err)
+			}
+			if string(got) != tc.want {
+				t.Errorf("MarshalJSON() = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRoutingIDMarshalJSONEmptyRawIsNull(t *testing.T) {
+	t.Parallel()
+
+	id := RoutingID{}
+	got, err := id.MarshalJSON()
+	if err != nil {
+		t.Fatalf("MarshalJSON() error = %v", err)
+	}
+	if string(got) != "null" {
+		t.Errorf("MarshalJSON() on empty RoutingID = %s, want null", got)
+	}
+}
+
+func TestRoutingResultMarshalJSONRoutingIDIsQuotedString(t *testing.T) {
+	t.Parallel()
+
+	// uint64 max — would lose precision if serialized as a JS Number.
+	const largeID = "18446744073709551615"
+	result := RoutingResult{
+		Success:                true,
+		DestinationBaseAccount: "GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLT7AV7Y6S33Z6S3CHBAAAAAAAAAAAAABQD2",
+		RoutingID:              NewRoutingID(largeID),
+		RoutingSource:          "muxed",
+	}
+
+	encoded, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("json.Marshal(RoutingResult) error = %v", err)
+	}
+
+	// Decode into a generic map so we can inspect the raw JSON type.
+	var raw map[string]any
+	if err := json.Unmarshal(encoded, &raw); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+
+	routingIdValue, ok := raw["routingId"]
+	if !ok {
+		t.Fatalf("routingId field missing from JSON: %s", encoded)
+	}
+
+	// In JSON the value must decode as a Go string, not a float64.
+	// If it were a bare integer the decoder would give us a float64.
+	if _, isString := routingIdValue.(string); !isString {
+		t.Errorf(
+			"routingId decoded as %T (%v), want string — "+
+				"bare integer literals lose precision above 2^53 in JS/Dart-Web",
+			routingIdValue, routingIdValue,
+		)
+	}
+
+	if routingIdValue != largeID {
+		t.Errorf("routingId = %v, want %q", routingIdValue, largeID)
+	}
+}
+
+func TestRoutingResultMarshalJSONRoundtrip(t *testing.T) {
+	t.Parallel()
+
+	original := RoutingResult{
+		Success:                true,
+		DestinationBaseAccount: "GABC",
+		RoutingID:              NewRoutingID("9007199254740993"),
+		RoutingSource:          "memo",
+	}
+
+	encoded, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal error = %v", err)
+	}
+
+	var decoded RoutingResult
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatalf("json.Unmarshal error = %v", err)
+	}
+
+	if decoded.RoutingID == nil {
+		t.Fatal("decoded RoutingID is nil")
+	}
+	if decoded.RoutingID.String() != "9007199254740993" {
+		t.Errorf("decoded RoutingID = %q, want %q", decoded.RoutingID.String(), "9007199254740993")
+	}
+}
+
+// ─── UnmarshalJSON ─────────────────────────────────────────────────────────────
+
 func TestRoutingIDUnmarshalJSONPreservesUint64Number(t *testing.T) {
 	t.Parallel()
 
