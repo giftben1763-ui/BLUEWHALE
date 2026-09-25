@@ -71,19 +71,29 @@ void main() {
       expect(result.destinationError, isNull);
     });
 
-    test('throws ExtractRoutingException for C-addresses', () {
+    test('returns structured result with INVALID_DESTINATION warning for C-addresses (#77)', () {
       const cAddress = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
-      expect(
-        () => extractRoutingSync(RoutingInput(destination: cAddress, memoType: 'none')),
-        throwsA(isA<ExtractRoutingException>()),
+      final result = extractRoutingSync(
+        RoutingInput(destination: cAddress, memoType: 'none'),
       );
+
+      expect(result.source, RoutingSource.none);
+      expect(result.destinationBaseAccount, isNull);
+      expect(result.id, isNull);
+      expect(result.warnings, hasLength(1));
+      expect(result.warnings.first.code, 'INVALID_DESTINATION');
+      expect(result.warnings.first.severity, 'error');
     });
 
-    test('throws ExtractRoutingException for empty destination', () {
-      expect(
-        () => extractRoutingSync(RoutingInput(destination: '', memoType: 'none')),
-        throwsA(isA<ExtractRoutingException>()),
+    test('returns structured destinationError for empty destination (#77)', () {
+      final result = extractRoutingSync(
+        RoutingInput(destination: '', memoType: 'none'),
       );
+
+      expect(result.source, RoutingSource.none);
+      expect(result.destinationBaseAccount, isNull);
+      expect(result.id, isNull);
+      expect(result.destinationError, isNotNull);
     });
   });
 
@@ -151,19 +161,29 @@ void main() {
       );
     });
 
-    test('propagates ExtractRoutingException for C-addresses as a Future error', () async {
+    test('returns structured result with INVALID_DESTINATION warning for C-addresses (#77)', () async {
       const cAddress = 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC';
-      await expectLater(
-        () => extractRouting(RoutingInput(destination: cAddress, memoType: 'none')),
-        throwsA(isA<ExtractRoutingException>()),
+      final result = await extractRouting(
+        RoutingInput(destination: cAddress, memoType: 'none'),
       );
+
+      expect(result.source, RoutingSource.none);
+      expect(result.destinationBaseAccount, isNull);
+      expect(result.id, isNull);
+      expect(result.warnings, hasLength(1));
+      expect(result.warnings.first.code, 'INVALID_DESTINATION');
+      expect(result.warnings.first.severity, 'error');
     });
 
-    test('propagates ExtractRoutingException for empty destination as a Future error', () async {
-      await expectLater(
-        () => extractRouting(RoutingInput(destination: '', memoType: 'none')),
-        throwsA(isA<ExtractRoutingException>()),
+    test('returns structured destinationError for empty destination (#77)', () async {
+      final result = await extractRouting(
+        RoutingInput(destination: '', memoType: 'none'),
       );
+
+      expect(result.source, RoutingSource.none);
+      expect(result.destinationBaseAccount, isNull);
+      expect(result.id, isNull);
+      expect(result.destinationError, isNotNull);
     });
   });
 }
