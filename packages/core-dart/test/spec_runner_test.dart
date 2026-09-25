@@ -94,40 +94,32 @@ void main() {
               sourceAccount: input['sourceAccount']?.toString(),
             );
 
-            try {
-              final result = await extractRouting(routingInput);
+            final result = await extractRouting(routingInput);
 
-              expect(result.destinationBaseAccount,
-                  normalizeExpectedBaseAccount(expected['destinationBaseAccount']));
+            expect(result.destinationBaseAccount,
+                normalizeExpectedBaseAccount(expected['destinationBaseAccount']));
 
-              if (expected['routingId'] != null) {
-                expect(result.id, BigInt.parse(expected['routingId'].toString()));
-              } else {
-                expect(result.id, isNull);
+            if (expected['routingId'] != null) {
+              expect(result.id, BigInt.parse(expected['routingId'].toString()));
+            } else {
+              expect(result.id, isNull);
+            }
+
+            expect(result.source.name, expected['routingSource']);
+
+            if (expected.containsKey('warnings')) {
+              final List<dynamic> expectedWarnings =
+                  expected['warnings'] as List<dynamic>;
+              expect(result.warnings.length, expectedWarnings.length);
+              for (var i = 0; i < expectedWarnings.length; i++) {
+                final eW = expectedWarnings[i] as Map<String, dynamic>;
+                expect(result.warnings[i].code, eW['code']);
               }
+            }
 
-              expect(result.source.name, expected['routingSource']);
-
-              if (expected.containsKey('warnings')) {
-                final List<dynamic> expectedWarnings =
-                    expected['warnings'] as List<dynamic>;
-                expect(result.warnings.length, expectedWarnings.length);
-                for (var i = 0; i < expectedWarnings.length; i++) {
-                  final eW = expectedWarnings[i] as Map<String, dynamic>;
-                  expect(result.warnings[i].code, eW['code']);
-                }
-              }
-
-              if (expected.containsKey('destinationError')) {
-                final eE = expected['destinationError'] as Map<String, dynamic>;
-                expect(result.destinationError?.code, eE['code']);
-              }
-            } on ExtractRoutingException {
-              if (destination.startsWith('C')) {
-                // Expected for C-address vectors in this spec runner
-              } else {
-                rethrow;
-              }
+            if (expected.containsKey('destinationError')) {
+              final eE = expected['destinationError'] as Map<String, dynamic>;
+              expect(result.destinationError?.code, eE['code']);
             }
             break;
         }
@@ -135,4 +127,5 @@ void main() {
     }
   });
 }
+
 

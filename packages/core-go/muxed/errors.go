@@ -6,9 +6,9 @@ import "fmt"
 type ErrorCode string
 
 const (
-	ErrInvalidGAddress   ErrorCode = "INVALID_G_ADDRESS"
+	ErrInvalidGAddress    ErrorCode = "INVALID_G_ADDRESS"
 	ErrUnknownVersionByte ErrorCode = "UNKNOWN_VERSION_BYTE"
-	ErrInvalidLength     ErrorCode = "INVALID_LENGTH"
+	ErrInvalidLength      ErrorCode = "INVALID_LENGTH"
 )
 
 // AddressError represents a muxed address-related error

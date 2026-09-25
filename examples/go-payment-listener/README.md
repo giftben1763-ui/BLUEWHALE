@@ -75,5 +75,54 @@ This implementation explicitly uses `listener.ExtractRouting` (found in `interna
 ## Link to Core Library
 [Bluewhale (Go)](https://github.com/REDISHFISH/BLUEWHALE/tree/main/packages/core-go)
 
+## Prometheus & Alertmanager Setup
+
+The listener exports Prometheus metrics at `:9090/metrics`.  An example
+[Alertmanager](https://prometheus.io/docs/alerting/latest/alertmanager/) rule
+file is provided at [`alerts.example.yml`](./alerts.example.yml).
+
+### Available metrics
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `stellar_payments_total` | Counter | `severity` (info/warn/error) | Every processed payment |
+| `stellar_routing_source_total` | Counter | `source` (muxed/memo/none) | Payments by routing method |
+| `stellar_payment_unroutable_total` | Counter | – | Payments that could not be credited (contract senders, invalid checksums, etc.) |
+
+### Enabling alerts
+
+1. Copy `alerts.example.yml` into your Prometheus `rules/` directory.
+2. Reference it from `prometheus.yml`:
+   ```yaml
+   rule_files:
+     - "rules/alerts.example.yml"
+   ```
+3. Configure your Alertmanager receiver (Slack, PagerDuty, email) in
+   `alertmanager.yml` and point Prometheus to it:
+   ```yaml
+   alerting:
+     alertmanagers:
+       - static_configs:
+           - targets: ["alertmanager:9093"]
+   ```
+4. Reload Prometheus:
+   ```bash
+   curl -X POST http://localhost:9090/-/reload
+   ```
+
+### Key alert: UnroutablePaymentSpike
+
+```yaml
+- alert: UnroutablePaymentSpike
+  expr: rate(stellar_payment_unroutable_total[5m]) > 5
+  for: 1m
+  labels:
+    severity: critical
+```
+
+This alert fires when more than 5 unroutable payments per second are observed
+over a 5-minute window — a strong signal of a contract-sender attack, burst of
+invalid checksums, or a misconfigured integration.
+
 ## License
 MIT

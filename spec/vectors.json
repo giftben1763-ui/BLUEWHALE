@@ -1,5 +1,5 @@
 {
-  "spec_version": "1.0.1",
+  "spec_version": "1.2.0",
   "description": "Normative test vectors for the Bluewhale. This file is the single source of truth for routing logic across TypeScript, Go, and Dart implementations. Any change to routing behavior MUST start here.",
   "cases": [
     {
@@ -396,6 +396,51 @@
         ]
       },
       "tags": ["negative", "edge", "utf8"]
+    },
+    {
+      "module": "extract_routing",
+      "description": "Contract source account (C...) clears routing state for G-address + MEMO_ID",
+      "input": {
+        "destination": "GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI",
+        "memoType": "id",
+        "memoValue": "100",
+        "sourceAccount": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+      },
+      "expected": {
+        "destinationBaseAccount": null,
+        "routingId": null,
+        "routingSource": "none",
+        "warnings": [
+          {
+            "code": "CONTRACT_SENDER_DETECTED",
+            "severity": "info",
+            "message": "Contract source detected. Routing state cleared."
+          }
+        ]
+      },
+      "tags": ["negative", "edge", "interop"]
+    },
+    {
+      "module": "extract_routing",
+      "description": "Contract source account (C...) clears routing state for M-address",
+      "input": {
+        "destination": "MAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQACAAAAAAAAAAAAD672",
+        "memoType": "none",
+        "sourceAccount": "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC"
+      },
+      "expected": {
+        "destinationBaseAccount": null,
+        "routingId": null,
+        "routingSource": "none",
+        "warnings": [
+          {
+            "code": "CONTRACT_SENDER_DETECTED",
+            "severity": "info",
+            "message": "Contract source detected. Routing state cleared."
+          }
+        ]
+      },
+      "tags": ["negative", "edge", "interop"]
     },
     {
       "module": "detect",

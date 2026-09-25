@@ -1,146 +1,78 @@
 /**
- * check-vectors-sync.js
+ * Coordinated release check.
  *
- * Verifies that every SDK package that tracks the spec version is aligned
- * with the `spec_version` field in `spec/vectors.json`.
+ * Every SDK is released in lockstep with spec/vectors.json `spec_version`:
+ *   - packages/spec/vectors.json carries the same spec_version,
+ *   - packages/spec, core-ts and core-dart manifests use that exact version,
+ *   - core-ts, core-go and core-dart CHANGELOG.md (Keep a Changelog format)
+ *     contain an `## [Unreleased]` section and a `## [<spec_version>]` entry.
  *
- * ## Checked packages
- *
- * | Package                         | File                              | Field        |
- * | ------------------------------- | --------------------------------- | ------------ |
- * | @redishfish/bluewhale-spec      | packages/spec/package.json        | version      |
- * | @redishfish/bluewhale-core (TS) | packages/core-ts/package.json     | version      |
- * | bluewhale_core (Dart/Flutter)   | packages/core-dart/pubspec.yaml   | spec_version |
- *
- * ## Go module versioning
- *
- * The Go SDK (`packages/core-go`) follows the standard Go module versioning
- * convention: releases are tagged as Git tags in the form:
- *
- *   packages/core-go/v<major>.<minor>.<patch>
- *   e.g. packages/core-go/v1.0.1
- *
- * Because the Go module version lives in a Git tag rather than a source
- * file, this script cannot check it automatically at development time.
- * To keep the Go SDK in sync with the spec:
- *
- *   1. When `spec_version` is bumped in `spec/vectors.json`, create a
- *      matching Git tag:
- *        git tag packages/core-go/v<new_spec_version>
- *        git push origin packages/core-go/v<new_spec_version>
- *
- *   2. The `verify-parity.yml` CI workflow runs `go test ./...` against
- *      the same spec vectors to confirm behavioral alignment independently
- *      of the version tag.
- *
- * Run:
- *   node scripts/check-vectors-sync.js
- *
- * Exit code 0 = all in sync.  Exit code 1 = at least one mismatch.
+ * core-go has no manifest version; it is released as the git tag
+ * `packages/core-go/v<spec_version>` and tracked through its CHANGELOG.
  */
-
-"use strict";
-
 const fs = require("fs");
 const path = require("path");
 
 const rootDir = path.join(__dirname, "..");
-const specPath = path.join(rootDir, "spec", "vectors.json");
-const specVersion = JSON.parse(fs.readFileSync(specPath, "utf8")).spec_version;
+const read = (rel) => fs.readFileSync(path.join(rootDir, rel), "utf8");
+const exists = (rel) => fs.existsSync(path.join(rootDir, rel));
 
-let hasError = false;
+const specVersion = JSON.parse(read(path.join("spec", "vectors.json"))).spec_version;
 
-// ─── JSON / package.json checks ──────────────────────────────────────────────
+const errors = [];
 
-const jsonPackages = [
-  path.join("packages", "spec", "package.json"),
-  path.join("packages", "core-ts", "package.json"),
-];
-
-jsonPackages.forEach((filePath) => {
-  const absolutePath = path.join(rootDir, filePath);
-  if (!fs.existsSync(absolutePath)) {
-    console.warn("Warning: file not found, skipping: " + filePath);
-    return;
-  }
-
-  const pkg = JSON.parse(fs.readFileSync(absolutePath, "utf8"));
-  if (pkg.version !== specVersion) {
-    console.error(
-      "Mismatch in " +
-        filePath +
-        ": expected " +
-        specVersion +
-        ", found " +
-        pkg.version
-    );
-    hasError = true;
-  }
-});
-
-// ─── Dart / pubspec.yaml check ────────────────────────────────────────────────
-//
-// The Dart package publishes its own semantic version to pub.dev via the
-// `version:` field in pubspec.yaml.  That version may advance independently
-// of the spec (e.g. for bug fixes or new Dart-specific features).  To track
-// spec alignment separately we read the `spec_version:` field.
-//
-// Adding the field to pubspec.yaml:
-//   spec_version: 1.0.1
-//
-// If the field is absent the check is skipped with a warning so that existing
-// installs continue to work while maintainers add the field.
-
-const dartPubspecPath = path.join(
-  rootDir,
-  "packages",
-  "core-dart",
-  "pubspec.yaml"
-);
-
-if (!fs.existsSync(dartPubspecPath)) {
-  console.warn(
-    "Warning: packages/core-dart/pubspec.yaml not found, skipping Dart check."
-  );
-} else {
-  const pubspecContent = fs.readFileSync(dartPubspecPath, "utf8");
-  const dartSpecVersion = extractYamlTopLevelValue(
-    pubspecContent,
-    "spec_version"
-  );
-
-  if (dartSpecVersion === null) {
-    console.warn(
-      "Warning: 'spec_version' field not found in " +
-        "packages/core-dart/pubspec.yaml. " +
-        "Add 'spec_version: " +
-        specVersion +
-        "' to track spec alignment."
-    );
-  } else if (dartSpecVersion !== specVersion) {
-    console.error(
-      "Mismatch in packages/core-dart/pubspec.yaml: " +
-        "spec_version expected " +
-        specVersion +
-        ", found " +
-        dartSpecVersion
-    );
-    hasError = true;
+// 1. Published spec package mirrors the normative spec version.
+const publishedVectors = path.join("packages", "spec", "vectors.json");
+if (exists(publishedVectors)) {
+  const published = JSON.parse(read(publishedVectors)).spec_version;
+  if (published !== specVersion) {
+    errors.push(`${publishedVectors}: spec_version ${published}, expected ${specVersion}`);
   }
 }
 
-// ─── Go module versioning note ───────────────────────────────────────────────
-//
-// Go versioning is checked at release time via Git tags; this script cannot
-// automate that check.  See the block comment at the top of this file for
-// the expected tagging convention.
-//
-// To verify the current Go SDK is aligned with the running spec version:
-//   git tag -l "packages/core-go/v${specVersion}"
+// 2. Package manifests are versioned in lockstep with the spec.
+const manifests = [
+  { file: path.join("packages", "spec", "package.json"), version: (s) => JSON.parse(s).version },
+  { file: path.join("packages", "core-ts", "package.json"), version: (s) => JSON.parse(s).version },
+  {
+    file: path.join("packages", "core-dart", "pubspec.yaml"),
+    version: (s) => (s.match(/^version:\s*["']?([^\s"']+)/m) || [])[1],
+  },
+];
 
-// ─── Result ──────────────────────────────────────────────────────────────────
+for (const { file, version } of manifests) {
+  if (!exists(file)) continue;
+  const found = version(read(file));
+  if (found !== specVersion) {
+    errors.push(`${file}: version ${found}, expected ${specVersion}`);
+  }
+}
 
-if (hasError) {
+// 3. Keep a Changelog entries exist for the release.
+const changelogs = [
+  path.join("packages", "core-ts", "CHANGELOG.md"),
+  path.join("packages", "core-go", "CHANGELOG.md"),
+  path.join("packages", "core-dart", "CHANGELOG.md"),
+];
+const escaped = specVersion.replace(/\./g, "\\.");
+const releaseHeading = new RegExp(`^## \\[${escaped}\\] - \\d{4}-\\d{2}-\\d{2}\\s*$`, "m");
+
+for (const file of changelogs) {
+  if (!exists(file)) {
+    errors.push(`${file}: missing`);
+    continue;
+  }
+  const content = read(file);
+  if (!/^## \[Unreleased\]\s*$/m.test(content)) {
+    errors.push(`${file}: missing "## [Unreleased]" section`);
+  }
+  if (!releaseHeading.test(content)) {
+    errors.push(`${file}: missing "## [${specVersion}] - YYYY-MM-DD" entry`);
+  }
+}
+
+if (errors.length > 0) {
+  for (const error of errors) console.error("Mismatch: " + error);
   process.exit(1);
 }
 

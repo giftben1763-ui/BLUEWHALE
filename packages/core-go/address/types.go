@@ -22,4 +22,3 @@ type Address struct {
 	MuxedID  uint64
 	Warnings []Warning
 }
-

@@ -18,3 +18,4 @@ jobs:
       - run: npm install ajv
       - run: node spec/validate.js
       - run: node scripts/check-spec-version-bump.js
+      - run: node scripts/check-vectors-sync.js

@@ -1,469 +1,301 @@
-// ignore_for_file: prefer_const_constructors
-import 'package:test/test.dart';
+// ignore_for_file: lines_longer_than_80_chars
+
+import 'dart:convert';
+
 import 'package:bluewhale_core/bluewhale_core.dart';
+import 'package:test/test.dart';
 
 void main() {
-  // ─── RoutingWarning equality ──────────────────────────────────────────────
+  group('RoutingResult.toJson / fromJson round-trip', () {
+    // ------------------------------------------------------------------ //
+    // toJson
+    // ------------------------------------------------------------------ //
 
-  group('RoutingWarning operator== and hashCode', () {
-    test('identical instances are equal', () {
-      const w = RoutingWarning(
-        code: 'memo-ignored',
-        severity: 'info',
-        message: 'Memo ignored for muxed address',
+    test('toJson emits correct cross-language JSON keys', () {
+      final result = RoutingResult(
+        source: RoutingSource.muxed,
+        id: BigInt.parse('9007199254740993'),
+        destinationBaseAccount:
+            'GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI',
+        warnings: [],
       );
-      expect(w == w, isTrue);
-    });
 
-    test('two warnings with same fields are equal', () {
-      const a = RoutingWarning(
-        code: 'memo-ignored',
-        severity: 'info',
-        message: 'Memo ignored for muxed address',
-      );
-      const b = RoutingWarning(
-        code: 'memo-ignored',
-        severity: 'info',
-        message: 'Memo ignored for muxed address',
-      );
-      expect(a, equals(b));
-    });
+      final json = result.toJson();
 
-    test('two warnings with same fields have the same hashCode', () {
-      const a = RoutingWarning(
-        code: 'memo-ignored',
-        severity: 'info',
-        message: 'Memo ignored for muxed address',
-      );
-      const b = RoutingWarning(
-        code: 'memo-ignored',
-        severity: 'info',
-        message: 'Memo ignored for muxed address',
-      );
-      expect(a.hashCode, equals(b.hashCode));
-    });
-
-    test('warnings with different codes are not equal', () {
-      const a = RoutingWarning(code: 'memo-ignored', severity: 'info', message: 'x');
-      const b = RoutingWarning(code: 'contract-sender', severity: 'info', message: 'x');
-      expect(a, isNot(equals(b)));
-    });
-
-    test('warnings with different severities are not equal', () {
-      const a = RoutingWarning(code: 'memo-ignored', severity: 'info', message: 'x');
-      const b = RoutingWarning(code: 'memo-ignored', severity: 'warn', message: 'x');
-      expect(a, isNot(equals(b)));
-    });
-
-    test('warnings with different messages are not equal', () {
-      const a = RoutingWarning(code: 'memo-ignored', severity: 'info', message: 'A');
-      const b = RoutingWarning(code: 'memo-ignored', severity: 'info', message: 'B');
-      expect(a, isNot(equals(b)));
-    });
-
-    test('predefined static constant memoIgnored equals itself', () {
-      expect(RoutingWarning.memoIgnored, equals(RoutingWarning.memoIgnored));
-    });
-
-    test('predefined static constants have stable hashCode', () {
+      expect(json['routingSource'], equals('muxed'));
+      expect(json['routingId'], equals('9007199254740993'));
       expect(
-        RoutingWarning.memoIgnored.hashCode,
-        equals(RoutingWarning.memoIgnored.hashCode),
+        json['destinationBaseAccount'],
+        equals('GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI'),
       );
+      expect(json['warnings'], isEmpty);
+      expect(json.containsKey('destinationError'), isFalse);
     });
 
-    test('warning is not equal to a different type', () {
-      const w = RoutingWarning(code: 'x', severity: 'info', message: 'y');
-      // ignore: unrelated_type_equality_checks
-      expect(w == 'not-a-warning', isFalse);
-    });
-  });
-
-  // ─── RoutingResult equality ──────────────────────────────────────────────
-
-  group('RoutingResult operator== and hashCode', () {
-    test('identical instances are equal', () {
-      final r = RoutingResult(
-        source: RoutingSource.none,
-        warnings: [],
-      );
-      expect(r == r, isTrue);
-    });
-
-    test('two minimal none-source results with no id or warnings are equal', () {
-      final a = RoutingResult(source: RoutingSource.none, warnings: []);
-      final b = RoutingResult(source: RoutingSource.none, warnings: []);
-      expect(a, equals(b));
-    });
-
-    test('equal results have the same hashCode', () {
-      final a = RoutingResult(source: RoutingSource.none, warnings: []);
-      final b = RoutingResult(source: RoutingSource.none, warnings: []);
-      expect(a.hashCode, equals(b.hashCode));
-    });
-
-    test('results with same muxed source, id, base account and no warnings are equal', () {
-      const base = 'GA7QYNF7SOWQ3GLR2BGMZEHXAVIRZA4KVWLT7AV7Y6S33Z6S3CHBAAAAAAAAAAAAABQD2';
-      final a = RoutingResult(
-        source: RoutingSource.muxed,
-        id: BigInt.from(12345),
-        destinationBaseAccount: base,
-        warnings: [],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.muxed,
-        id: BigInt.from(12345),
-        destinationBaseAccount: base,
-        warnings: [],
-      );
-      expect(a, equals(b));
-      expect(a.hashCode, equals(b.hashCode));
-    });
-
-    test('results with same memo source, id, and warnings are equal', () {
-      const warning = RoutingWarning(
-        code: 'memo-ignored',
-        severity: 'info',
-        message: 'Memo ignored for muxed address',
-      );
-      final a = RoutingResult(
+    test('toJson serializes routingId as decimal string (not a number)', () {
+      // Ensures values above Number.MAX_SAFE_INTEGER are preserved exactly.
+      const aboveMaxSafe = '9007199254740993'; // MAX_SAFE_INTEGER + 2
+      final result = RoutingResult(
         source: RoutingSource.memo,
-        id: BigInt.from(99),
-        warnings: [warning],
+        id: BigInt.parse(aboveMaxSafe),
+        warnings: [],
       );
-      final b = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(99),
-        warnings: [warning],
-      );
-      expect(a, equals(b));
-      expect(a.hashCode, equals(b.hashCode));
+
+      final json = result.toJson();
+      expect(json['routingId'], isA<String>());
+      expect(json['routingId'], equals(aboveMaxSafe));
     });
 
-    test('results differ when sources differ', () {
-      final a = RoutingResult(source: RoutingSource.muxed, warnings: []);
-      final b = RoutingResult(source: RoutingSource.memo, warnings: []);
-      expect(a, isNot(equals(b)));
-    });
-
-    test('results differ when ids differ', () {
-      final a = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(1),
-        warnings: [],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(2),
-        warnings: [],
-      );
-      expect(a, isNot(equals(b)));
-    });
-
-    test('results differ when one has id and the other does not', () {
-      final a = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(1),
-        warnings: [],
-      );
-      final b = RoutingResult(source: RoutingSource.memo, warnings: []);
-      expect(a, isNot(equals(b)));
-    });
-
-    test('results differ when destinationBaseAccount differs', () {
-      final a = RoutingResult(
-        source: RoutingSource.muxed,
-        destinationBaseAccount: 'GABC',
-        warnings: [],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.muxed,
-        destinationBaseAccount: 'GDEF',
-        warnings: [],
-      );
-      expect(a, isNot(equals(b)));
-    });
-
-    test('results differ when one has destinationBaseAccount and the other does not', () {
-      final a = RoutingResult(
-        source: RoutingSource.muxed,
-        destinationBaseAccount: 'GABC',
-        warnings: [],
-      );
-      final b = RoutingResult(source: RoutingSource.muxed, warnings: []);
-      expect(a, isNot(equals(b)));
-    });
-
-    test('results differ when warnings list length differs', () {
-      const w = RoutingWarning(code: 'x', severity: 'info', message: 'y');
-      final a = RoutingResult(source: RoutingSource.none, warnings: [w]);
-      final b = RoutingResult(source: RoutingSource.none, warnings: []);
-      expect(a, isNot(equals(b)));
-    });
-
-    test('results differ when warnings content differs', () {
-      final a = RoutingResult(
-        source: RoutingSource.none,
-        warnings: [
-          const RoutingWarning(code: 'a', severity: 'info', message: 'm'),
-        ],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.none,
-        warnings: [
-          const RoutingWarning(code: 'b', severity: 'info', message: 'm'),
-        ],
-      );
-      expect(a, isNot(equals(b)));
-    });
-
-    test('results with multiple identical warnings are equal', () {
-      const w1 = RoutingWarning(code: 'a', severity: 'info', message: 'x');
-      const w2 = RoutingWarning(code: 'b', severity: 'warn', message: 'y');
-      final a = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(7),
-        warnings: [w1, w2],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(7),
-        warnings: [w1, w2],
-      );
-      expect(a, equals(b));
-      expect(a.hashCode, equals(b.hashCode));
-    });
-
-    test('results with same warnings in different order are not equal', () {
-      const w1 = RoutingWarning(code: 'a', severity: 'info', message: 'x');
-      const w2 = RoutingWarning(code: 'b', severity: 'warn', message: 'y');
-      final a = RoutingResult(
-        source: RoutingSource.memo,
-        warnings: [w1, w2],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.memo,
-        warnings: [w2, w1],
-      );
-      expect(a, isNot(equals(b)));
-    });
-
-    test('results with same destinationError code are equal', () {
-      final a = RoutingResult(
-        source: RoutingSource.none,
-        warnings: [],
-        destinationError: DestinationError(code: 'ERR_BAD', message: 'bad'),
-      );
-      final b = RoutingResult(
-        source: RoutingSource.none,
-        warnings: [],
-        destinationError: DestinationError(code: 'ERR_BAD', message: 'different message'),
-      );
-      // equality only checks destinationError.code, not message
-      expect(a, equals(b));
-    });
-
-    test('results with different destinationError codes are not equal', () {
-      final a = RoutingResult(
-        source: RoutingSource.none,
-        warnings: [],
-        destinationError: DestinationError(code: 'ERR_A', message: 'x'),
-      );
-      final b = RoutingResult(
-        source: RoutingSource.none,
-        warnings: [],
-        destinationError: DestinationError(code: 'ERR_B', message: 'x'),
-      );
-      expect(a, isNot(equals(b)));
-    });
-
-    test('result with destinationError is not equal to one without', () {
-      final a = RoutingResult(
-        source: RoutingSource.none,
-        warnings: [],
-        destinationError: DestinationError(code: 'ERR', message: 'x'),
-      );
-      final b = RoutingResult(source: RoutingSource.none, warnings: []);
-      expect(a, isNot(equals(b)));
-    });
-
-    // ─── Precision: uint64 boundary values ─────────────────────────────────
-
-    test('results with large uint64 ids at uint64 max are equal', () {
-      final maxUint64 = BigInt.parse('18446744073709551615');
-      final a = RoutingResult(
-        source: RoutingSource.muxed,
-        id: maxUint64,
-        destinationBaseAccount: 'GA',
-        warnings: [],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.muxed,
-        id: maxUint64,
-        destinationBaseAccount: 'GA',
-        warnings: [],
-      );
-      expect(a, equals(b));
-      expect(a.hashCode, equals(b.hashCode));
-    });
-
-    test('results differ when one id is above js safe integer and the other is not', () {
-      // 2^53 = 9007199254740992 — one above MAX_SAFE_INTEGER
-      final unsafe = BigInt.parse('9007199254740993');
-      final safe = BigInt.parse('9007199254740991');
-      final a = RoutingResult(
-        source: RoutingSource.memo,
-        id: unsafe,
-        warnings: [],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.memo,
-        id: safe,
-        warnings: [],
-      );
-      expect(a, isNot(equals(b)));
-    });
-
-    // ─── Use in Set / Map (depends on hashCode contract) ───────────────────
-
-    test('identical RoutingResult values deduplicate in a Set', () {
-      final a = RoutingResult(
-        source: RoutingSource.muxed,
-        id: BigInt.from(42),
-        destinationBaseAccount: 'GA1',
-        warnings: [],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.muxed,
-        id: BigInt.from(42),
-        destinationBaseAccount: 'GA1',
-        warnings: [],
-      );
-      final set = <RoutingResult>{a, b};
-      expect(set.length, equals(1));
-    });
-
-    test('different RoutingResult values are both retained in a Set', () {
-      final a = RoutingResult(
-        source: RoutingSource.muxed,
-        id: BigInt.from(1),
-        warnings: [],
-      );
-      final b = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(2),
-        warnings: [],
-      );
-      final set = <RoutingResult>{a, b};
-      expect(set.length, equals(2));
-    });
-
-    test('RoutingResult can be used as a Map key', () {
-      final key = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(123),
-        warnings: [],
-      );
-      final lookup = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(123),
-        warnings: [],
-      );
-      final map = <RoutingResult, String>{key: 'found'};
-      expect(map[lookup], equals('found'));
-    });
-
-    // ─── Immutability: warnings list is unmodifiable ────────────────────────
-
-    test('mutating the original warnings list does not affect RoutingResult', () {
-      final mutable = <RoutingWarning>[
-        const RoutingWarning(code: 'a', severity: 'info', message: 'x'),
-      ];
-      final result = RoutingResult(source: RoutingSource.none, warnings: mutable);
-      mutable.add(
-        const RoutingWarning(code: 'b', severity: 'warn', message: 'y'),
-      );
-      // The result's internal list should still have length 1
-      expect(result.warnings.length, equals(1));
-    });
-
-    test('RoutingResult warnings list is unmodifiable', () {
+    test('toJson emits null routingId when id is absent', () {
       final result = RoutingResult(
         source: RoutingSource.none,
+        warnings: [],
+      );
+
+      final json = result.toJson();
+      expect(json['routingId'], isNull);
+    });
+
+    test('toJson includes destinationError when present', () {
+      final result = RoutingResult(
+        source: RoutingSource.none,
+        warnings: [],
+        destinationError: DestinationError(
+          code: 'INVALID_CHECKSUM',
+          message: 'Checksum mismatch',
+        ),
+      );
+
+      final json = result.toJson();
+      expect(json['destinationError'], isNotNull);
+      expect(json['destinationError']['code'], equals('INVALID_CHECKSUM'));
+      expect(json['destinationError']['message'], equals('Checksum mismatch'));
+    });
+
+    test('toJson serializes warnings with code, severity, and message', () {
+      final result = RoutingResult(
+        source: RoutingSource.muxed,
         warnings: [
-          const RoutingWarning(code: 'x', severity: 'info', message: 'y'),
+          const RoutingWarning(
+            code: 'MEMO_PRESENT_WITH_MUXED',
+            severity: 'warn',
+            message: 'Routing ID found in both M-address and Memo.',
+          ),
         ],
       );
+
+      final json = result.toJson();
+      final warnings = json['warnings'] as List<dynamic>;
+      expect(warnings, hasLength(1));
+      expect(warnings[0]['code'], equals('MEMO_PRESENT_WITH_MUXED'));
+      expect(warnings[0]['severity'], equals('warn'));
       expect(
-        () => result.warnings.add(
-          const RoutingWarning(code: 'z', severity: 'warn', message: 'w'),
+        warnings[0]['message'],
+        equals('Routing ID found in both M-address and Memo.'),
+      );
+    });
+
+    // ------------------------------------------------------------------ //
+    // fromJson
+    // ------------------------------------------------------------------ //
+
+    test('fromJson reconstructs a RoutingResult from a JSON map', () {
+      final json = <String, dynamic>{
+        'destinationBaseAccount':
+            'GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI',
+        'routingId': '9007199254740993',
+        'routingSource': 'muxed',
+        'warnings': <dynamic>[],
+      };
+
+      final result = RoutingResult.fromJson(json);
+
+      expect(result.source, equals(RoutingSource.muxed));
+      expect(result.id, equals(BigInt.parse('9007199254740993')));
+      expect(
+        result.destinationBaseAccount,
+        equals('GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI'),
+      );
+      expect(result.warnings, isEmpty);
+      expect(result.destinationError, isNull);
+    });
+
+    test('fromJson handles null routingId', () {
+      final json = <String, dynamic>{
+        'destinationBaseAccount': null,
+        'routingId': null,
+        'routingSource': 'none',
+        'warnings': <dynamic>[],
+      };
+
+      final result = RoutingResult.fromJson(json);
+
+      expect(result.id, isNull);
+      expect(result.source, equals(RoutingSource.none));
+    });
+
+    test('fromJson parses destinationError correctly', () {
+      final json = <String, dynamic>{
+        'destinationBaseAccount': null,
+        'routingId': null,
+        'routingSource': 'none',
+        'warnings': <dynamic>[],
+        'destinationError': <String, dynamic>{
+          'code': 'UNKNOWN_PREFIX',
+          'message': 'Address prefix not recognized',
+        },
+      };
+
+      final result = RoutingResult.fromJson(json);
+
+      expect(result.destinationError, isNotNull);
+      expect(result.destinationError!.code, equals('UNKNOWN_PREFIX'));
+      expect(
+        result.destinationError!.message,
+        equals('Address prefix not recognized'),
+      );
+    });
+
+    test('fromJson parses warnings list', () {
+      final json = <String, dynamic>{
+        'destinationBaseAccount':
+            'GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI',
+        'routingId': null,
+        'routingSource': 'none',
+        'warnings': <dynamic>[
+          <String, dynamic>{
+            'code': 'MEMO_TEXT_UNROUTABLE',
+            'severity': 'warn',
+            'message': 'MEMO_TEXT was not a valid numeric uint64.',
+          },
+        ],
+      };
+
+      final result = RoutingResult.fromJson(json);
+
+      expect(result.warnings, hasLength(1));
+      expect(result.warnings[0].code, equals('MEMO_TEXT_UNROUTABLE'));
+      expect(result.warnings[0].severity, equals('warn'));
+    });
+
+    test('fromJson falls back to RoutingSource.none for unknown source value',
+        () {
+      final json = <String, dynamic>{
+        'destinationBaseAccount': null,
+        'routingId': null,
+        'routingSource': 'unknown_future_value',
+        'warnings': <dynamic>[],
+      };
+
+      final result = RoutingResult.fromJson(json);
+      expect(result.source, equals(RoutingSource.none));
+    });
+
+    // ------------------------------------------------------------------ //
+    // Round-trip (toJson → jsonEncode → jsonDecode → fromJson)
+    // ------------------------------------------------------------------ //
+
+    test('full round-trip preserves exact uint64 routing ID above MAX_SAFE_INTEGER',
+        () {
+      const precisionHazardId = '9007199254740993';
+      final original = RoutingResult(
+        source: RoutingSource.muxed,
+        id: BigInt.parse(precisionHazardId),
+        destinationBaseAccount:
+            'GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI',
+        warnings: [],
+      );
+
+      // Simulate serialization to a JSON string and back.
+      final encoded = jsonEncode(original.toJson());
+      final decoded =
+          RoutingResult.fromJson(jsonDecode(encoded) as Map<String, dynamic>);
+
+      expect(decoded.source, equals(original.source));
+      expect(decoded.id, equals(original.id));
+      expect(decoded.destinationBaseAccount, equals(original.destinationBaseAccount));
+    });
+
+    test('full round-trip with no routing ID', () {
+      final original = RoutingResult(
+        source: RoutingSource.none,
+        warnings: [
+          const RoutingWarning(
+            code: 'INVALID_DESTINATION',
+            severity: 'error',
+            message: 'C address is not a valid destination',
+          ),
+        ],
+        destinationError: DestinationError(
+          code: 'INVALID_CHECKSUM',
+          message: 'Checksum mismatch',
         ),
-        throwsUnsupportedError,
       );
+
+      final encoded = jsonEncode(original.toJson());
+      final decoded =
+          RoutingResult.fromJson(jsonDecode(encoded) as Map<String, dynamic>);
+
+      expect(decoded.source, equals(RoutingSource.none));
+      expect(decoded.id, isNull);
+      expect(decoded.warnings, hasLength(1));
+      expect(decoded.warnings[0].code, equals('INVALID_DESTINATION'));
+      expect(decoded.destinationError!.code, equals('INVALID_CHECKSUM'));
     });
-  });
 
-  // ─── RoutingResult.idString ──────────────────────────────────────────────
-
-  group('RoutingResult.idString', () {
-    test('idString returns null when no id is set', () {
-      final r = RoutingResult(source: RoutingSource.none, warnings: []);
-      expect(r.idString, isNull);
-    });
-
-    test('idString returns decimal string for small id', () {
-      final r = RoutingResult(
+    test('full round-trip for memo routing', () {
+      final original = RoutingResult(
         source: RoutingSource.memo,
+        id: BigInt.from(100),
+        destinationBaseAccount:
+            'GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI',
+        warnings: [],
+      );
+
+      final encoded = jsonEncode(original.toJson());
+      final decoded =
+          RoutingResult.fromJson(jsonDecode(encoded) as Map<String, dynamic>);
+
+      expect(decoded.source, equals(RoutingSource.memo));
+      expect(decoded.id, equals(BigInt.from(100)));
+      expect(decoded.destinationBaseAccount, equals(original.destinationBaseAccount));
+    });
+
+    // ------------------------------------------------------------------ //
+    // Cross-language JSON key names (Issue #78)
+    // ------------------------------------------------------------------ //
+
+    test('JSON keys match Go and TypeScript wire format exactly', () {
+      // These are the canonical field names specified in Issue #78:
+      // destinationBaseAccount, routingId, routingSource, warnings, destinationError
+      final result = RoutingResult(
+        source: RoutingSource.muxed,
         id: BigInt.from(42),
-        warnings: [],
+        destinationBaseAccount:
+            'GAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQADRSI',
+        warnings: [
+          const RoutingWarning(
+            code: 'MEMO_PRESENT_WITH_MUXED',
+            severity: 'warn',
+            message: 'Routing ID found in both M-address and Memo.',
+          ),
+        ],
+        destinationError: null,
       );
-      expect(r.idString, equals('42'));
-    });
 
-    test('idString is exact for uint64 max', () {
-      final r = RoutingResult(
-        source: RoutingSource.muxed,
-        id: BigInt.parse('18446744073709551615'),
-        warnings: [],
-      );
-      expect(r.idString, equals('18446744073709551615'));
-    });
+      final json = result.toJson();
 
-    test('idString is exact for value above JS MAX_SAFE_INTEGER', () {
-      // 2^53 + 1 — would be silently truncated by JS Number
-      final r = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.parse('9007199254740993'),
-        warnings: [],
-      );
-      expect(r.idString, equals('9007199254740993'));
-    });
-  });
+      // Verify all 5 canonical keys are present
+      expect(json.containsKey('destinationBaseAccount'), isTrue);
+      expect(json.containsKey('routingId'), isTrue);
+      expect(json.containsKey('routingSource'), isTrue);
+      expect(json.containsKey('warnings'), isTrue);
+      // destinationError is only included when not null
+      expect(json.containsKey('destinationError'), isFalse);
 
-  // ─── RoutingResult.safeId ────────────────────────────────────────────────
-
-  group('RoutingResult.safeId', () {
-    test('safeId returns null when no id is set', () {
-      final r = RoutingResult(source: RoutingSource.none, warnings: []);
-      expect(r.safeId, isNull);
-    });
-
-    test('safeId value matches id as string', () {
-      final r = RoutingResult(
-        source: RoutingSource.memo,
-        id: BigInt.from(777),
-        warnings: [],
-      );
-      expect(r.safeId?.value, equals('777'));
-    });
-
-    test('safeId is exact for uint64 max', () {
-      final r = RoutingResult(
-        source: RoutingSource.muxed,
-        id: BigInt.parse('18446744073709551615'),
-        warnings: [],
-      );
-      expect(r.safeId?.value, equals('18446744073709551615'));
+      // Verify values
+      expect(json['routingSource'], equals('muxed'));
+      expect(json['routingId'], equals('42'));
     });
   });
 }

@@ -7,10 +7,10 @@ func TestValidate(t *testing.T) {
 	const mAddr = "MAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQACAAAAAAAAAAAAD672"
 
 	tests := []struct {
-		name    string
-		addr    string
-		kinds   []AddressKind
-		want    bool
+		name  string
+		addr  string
+		kinds []AddressKind
+		want  bool
 	}{
 		{
 			name: "invalid address",
@@ -57,4 +57,3 @@ func TestValidate(t *testing.T) {
 		})
 	}
 }
-

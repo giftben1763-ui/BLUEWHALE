@@ -15,73 +15,138 @@ const (
 	VersionByteContract     = VersionByteC
 )
 
+// strkeyEncoding is shared so decoding and encoding do not allocate a new
+// *base32.Encoding on every call.
+var strkeyEncoding = base32.StdEncoding.WithPadding(base32.NoPadding)
+
+// Boxed copies of the standard validation errors. Converting a RoutingError
+// struct to the error interface allocates, so the hot path returns these
+// preallocated values instead. They compare equal to the exported
+// Err*Error values under errors.Is.
+var (
+	errInvalidLength      error = ErrInvalidLengthError
+	errInvalidBase32      error = ErrInvalidBase32Error
+	errInvalidChecksum    error = ErrInvalidChecksumError
+	errUnknownPrefix      error = ErrUnknownPrefixError
+	errUnknownVersionByte error = ErrUnknownVersionByteError
+)
+
+// stackBufLen bounds the scratch buffers kept on the stack during decode and
+// encode. The longest supported strkey (M-address) is 69 characters.
+const stackBufLen = 128
+
 // DecodeStrKey decodes a strkey address and returns version byte and payload.
 func DecodeStrKey(address string) (versionByte byte, payload []byte, err error) {
 	if address == "" {
 		return 0, nil, ErrInvalidLengthError
 	}
 
-	// Convert to uppercase for base32 decoding.
+	// Convert to uppercase for base32 decoding. DecodeStrKey only validates;
+	// Parse reports case normalization via WarnNonCanonicalAddress.
 	address = strings.ToUpper(address)
 
-	// Check basic length constraints.
+// decodeStrKey is DecodeStrKey that also returns the canonical (uppercase)
+// form of address. canonical aliases address when it is already uppercase.
+func decodeStrKey(address string) (versionByte byte, payload []byte, canonical string, err error) {
 	if len(address) < 3 {
-		return 0, nil, ErrInvalidLengthError
+		return 0, nil, "", errInvalidLength
 	}
 
-	// Base32 decode without padding.
-	decoder := base32.StdEncoding.WithPadding(base32.NoPadding)
-	decoded, err := decoder.DecodeString(address)
+	// Reject unsupported prefixes with a byte comparison before doing any
+	// base32 work. The first character fixes the top five bits of the
+	// version byte, so this is consistent with the version byte check below.
+	switch address[0] {
+	case 'G', 'g', 'M', 'm', 'C', 'c':
+	default:
+		return 0, nil, "", errUnknownPrefix
+	}
+
+	// strings.ToUpper returns its input without allocating when it is
+	// already uppercase ASCII.
+	canonical = strings.ToUpper(address)
+
+	// DecodeString decodes in place into a single buffer; Decode would
+	// allocate an extra internal copy of its input.
+	decoded, err := strkeyEncoding.DecodeString(canonical)
 	if err != nil {
-		return 0, nil, ErrInvalidBase32Error
+		return 0, nil, "", errInvalidBase32
 	}
+	n := len(decoded)
 
-	// Verify round-trip encoding to catch invalid inputs.
-	reencoded := decoder.EncodeToString(decoded)
-	if reencoded != address {
-		return 0, nil, ErrInvalidBase32Error
+	// Verify round-trip encoding to reject non-zero trailing bits.
+	var reBuf [stackBufLen]byte
+	var re []byte
+	if encLen := strkeyEncoding.EncodedLen(n); encLen <= len(reBuf) {
+		re = reBuf[:encLen]
+	} else {
+		re = make([]byte, encLen)
+	}
+	strkeyEncoding.Encode(re, decoded)
+	if string(re) != canonical {
+		return 0, nil, "", errInvalidBase32
 	}
 
 	// Minimum length: version byte (1) + payload (at least 1) + checksum (2).
-	if len(decoded) < 4 {
-		return 0, nil, ErrInvalidLengthError
+	if n < 4 {
+		return 0, nil, "", errInvalidLength
 	}
 
-	// Extract version byte, payload, and checksum.
 	versionByte = decoded[0]
-	payload = decoded[:len(decoded)-2]
-	checksum := decoded[len(decoded)-2:]
-
-	// Validate version byte.
 	switch versionByte {
 	case VersionByteG, VersionByteM, VersionByteC:
 	default:
-		return 0, nil, ErrUnknownVersionByteError
+		return 0, nil, "", errUnknownVersionByte
 	}
 
-	// Calculate and verify checksum.
-	expectedCRC := CalculateCRC16(payload)
-	expectedChecksum := []byte{byte(expectedCRC & 0xff), byte((expectedCRC >> 8) & 0xff)}
-
-	if checksum[0] != expectedChecksum[0] || checksum[1] != expectedChecksum[1] {
-		return 0, nil, ErrInvalidChecksumError
+	crc := CalculateCRC16(decoded[:n-2])
+	if decoded[n-2] != byte(crc) || decoded[n-1] != byte(crc>>8) {
+		return 0, nil, "", errInvalidChecksum
 	}
 
-	// Return payload without version byte.
-	return versionByte, payload[1:], nil
+	// Return payload without version byte or checksum.
+	return versionByte, decoded[1 : n-2], canonical, nil
 }
 
 // EncodeStrKey encodes a payload with a version byte and checksum.
 func EncodeStrKey(versionByte byte, payload []byte) (string, error) {
-	versionedPayload := make([]byte, 1+len(payload))
-	versionedPayload[0] = versionByte
-	copy(versionedPayload[1:], payload)
+	rawLen := 1 + len(payload) + 2
 
-	crc := CalculateCRC16(versionedPayload)
-	checksum := []byte{byte(crc & 0xff), byte((crc >> 8) & 0xff)}
+	var rawBuf [stackBufLen]byte
+	var raw []byte
+	if rawLen <= len(rawBuf) {
+		raw = rawBuf[:rawLen]
+	} else {
+		raw = make([]byte, rawLen)
+	}
+	raw[0] = versionByte
+	copy(raw[1:], payload)
 
-	fullPayload := append(versionedPayload, checksum...)
+	crc := CalculateCRC16(raw[:rawLen-2])
+	raw[rawLen-2] = byte(crc)
+	raw[rawLen-1] = byte(crc >> 8)
 
-	encoder := base32.StdEncoding.WithPadding(base32.NoPadding)
-	return encoder.EncodeToString(fullPayload), nil
+	var outBuf [stackBufLen]byte
+	var out []byte
+	if encLen := strkeyEncoding.EncodedLen(rawLen); encLen <= len(outBuf) {
+		out = outBuf[:encLen]
+	} else {
+		out = make([]byte, encLen)
+	}
+	strkeyEncoding.Encode(out, raw)
+	return string(out), nil
+}
+
+// kindForVersionByte maps a version byte validated by decodeStrKey to its
+// AddressKind.
+func kindForVersionByte(versionByte byte) (AddressKind, error) {
+	switch versionByte {
+	case VersionByteG:
+		return KindG, nil
+	case VersionByteM:
+		return KindM, nil
+	case VersionByteC:
+		return KindC, nil
+	default:
+		return "", errUnknownVersionByte
+	}
 }

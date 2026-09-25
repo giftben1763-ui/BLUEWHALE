@@ -163,3 +163,22 @@ func TestEncodeMuxedUint64MaxRoundtrip(t *testing.T) {
 		t.Fatalf("decoded id mismatch: got %d want %d", decodedID, maxUint64)
 	}
 }
+
+// benchDecodeSink keeps benchmark results live so the compiler cannot elide calls.
+var benchDecodeSink uint64
+
+// BenchmarkDecodeMuxed measures M-address decoding throughput (base G-address
+// plus 64-bit ID) at the 2^53+1 interop boundary.
+func BenchmarkDecodeMuxed(b *testing.B) {
+	const mAddr = "MAYCUYT553C5LHVE2XPW5GMEJT4BXGM7AHMJWLAPZP53KJO7EIQACABAAAAAAAAAAEVIG"
+	if _, _, err := DecodeMuxed(mAddr); err != nil {
+		b.Fatalf("DecodeMuxed unexpected error: %v", err)
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	var id uint64
+	for i := 0; i < b.N; i++ {
+		_, id, _ = DecodeMuxed(mAddr)
+	}
+	benchDecodeSink = id
+}

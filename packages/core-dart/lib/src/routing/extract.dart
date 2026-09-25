@@ -4,10 +4,18 @@ import '../muxed/decode.dart';
 import 'routing_result.dart';
 import 'memo.dart';
 import 'safe_routing_id.dart';
+import 'severity.dart';
 
 /// Extracts deposit routing information from a Stellar payment input.
 /// Following the standard priority policy, M-address identifiers take
 /// precedence over any provided memo.
+///
+/// Zero-throw policy: this function never throws for any valid string input.
+/// C-addresses, empty destinations, and unrecognized prefixes are returned as
+/// a structured [RoutingResult] with either an `INVALID_DESTINATION` warning
+/// or a [DestinationError], rather than raising an [ExtractRoutingException].
+/// The only remaining exception case is when [RoutingInput.destination] is
+/// truly invalid at the type level (which cannot happen in typed Dart code).
 ///
 /// Web safety: routing IDs are resolved through [SafeRoutingId], which
 /// parses the canonical decimal **string** exactly and never converts
@@ -19,16 +27,46 @@ import 'safe_routing_id.dart';
 /// This is the synchronous variant for pure string parsing.
 /// For future compatibility with async network checks (Federation, SEP-0029),
 /// use [extractRouting] instead.
+///
+/// Warnings below [RoutingInput.minSeverityLevel] are filtered out using the
+/// shared severity ordering (info = 0, warn = 1, error = 2).
 RoutingResult extractRoutingSync(RoutingInput input) {
+  final result = _extractRoutingUnfiltered(input);
+  if (severityWeight(input.minSeverityLevel) == 0) return result;
+  return RoutingResult(
+    source: result.source,
+    id: result.id,
+    destinationBaseAccount: result.destinationBaseAccount,
+    destinationError: result.destinationError,
+    warnings: filterBySeverity(result.warnings, input.minSeverityLevel),
+  );
+}
+
+RoutingResult _extractRoutingUnfiltered(RoutingInput input) {
   final trimmed = input.destination.trim();
+
+  // Empty destination → return structured destinationError (zero-throw policy).
   if (trimmed.isEmpty) {
-    throw const ExtractRoutingException('Invalid input: destination must be a non-empty string.');
+    return RoutingResult(
+      source: RoutingSource.none,
+      warnings: [],
+      destinationError: DestinationError(
+        code: codes.ErrorCode.unknownPrefix,
+        message: 'Invalid input: destination must be a non-empty string.',
+      ),
+    );
   }
 
-  final prefix = trimmed[0].toUpperCase();
-  if (prefix != 'G' && prefix != 'M') {
-    throw ExtractRoutingException(
-      'Invalid destination: expected a G or M address, got "${input.destination}".',
+  final parsed = parse(input.destination);
+
+  if (parsed.kind == codes.AddressKind.c) {
+    return RoutingResult(
+      source: RoutingSource.none,
+      warnings: [
+        for (final w in parsed.warnings)
+          RoutingWarning(code: w.code, severity: w.severity, message: w.message),
+        RoutingWarning.invalidDestination,
+      ],
     );
   }
 
@@ -45,8 +83,6 @@ RoutingResult extractRoutingSync(RoutingInput input) {
       // Ignore source account parsing errors for routing extraction
     }
   }
-
-  final parsed = parse(input.destination);
 
   if (parsed.kind == null) {
     return RoutingResult(
@@ -251,13 +287,14 @@ Future<RoutingResult> extractRouting(
 
   try {
     if (await fetchMemoRequirement(result.destinationBaseAccount!)) {
-      return RoutingResult(
+      final withMemoWarning = RoutingResult(
         source: result.source,
         id: result.id,
         destinationBaseAccount: result.destinationBaseAccount,
         destinationError: result.destinationError,
         warnings: [...result.warnings, RoutingWarning.missingRequiredMemo],
       );
+      return _filterBySeverity(withMemoWarning, input.minSeverityLevel);
     }
   } catch (_) {
     // Network/configuration failures must not change the synchronous result.
