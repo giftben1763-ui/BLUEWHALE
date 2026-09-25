@@ -59,36 +59,33 @@ export function isRoutableAddress(address: unknown): address is string {
 }
 
 /**
- * Validates that the destination string passes the minimum structural
- * requirements for a Stellar address before routing logic is applied.
- * Only G-addresses and M-addresses are valid routing targets.
- * Throws ExtractRoutingError for anything that fails this check.
- */
-function assertRoutableAddress(destination: string): void {
-  if (!destination || typeof destination !== "string") {
-    throw new ExtractRoutingError(
-      "Invalid input: destination must be a non-empty string."
-    );
-  }
-  if (!isRoutableAddress(destination)) {
-    throw new ExtractRoutingError(
-      `Invalid destination: expected a G or M address, got "${destination}".`
-    );
-  }
-}
-
-/**
  * Extracts deposit routing information from a Stellar address and memo.
- * 
+ *
+ * Zero-throw policy: this function never throws for any valid address string
+ * input. C-addresses and addresses with unrecognized prefixes are returned as
+ * a structured result with a `destinationError` field rather than raising an
+ * exception. The only case where an exception is still thrown is when
+ * `destination` is not a string at all (a programmer error / invalid input
+ * type), which is reserved for strict type enforcement.
+ *
  * Routing Policy:
  * 1. M-addresses: Routing ID is extracted from the address; any memo is ignored for routing.
  * 2. G-addresses: Routing ID is extracted from MEMO_ID or numeric MEMO_TEXT if valid.
- * 
+ * 3. C-addresses: Returned as a structured result with an INVALID_DESTINATION warning.
+ * 4. Unknown prefixes / malformed input: Returned with a destinationError.
+ *
  * @param input - The destination address and optional memo components.
  * @returns A result containing the base account, routing ID, source, and any warnings.
  */
 export function extractRouting(input: RoutingInput): RoutingResult {
-  assertRoutableAddress(input.destination);
+  // Only throw for a non-string destination — this is a programmer error, not
+  // an address-domain error, and cannot be meaningfully expressed as a
+  // RoutingResult.
+  if (typeof input.destination !== "string") {
+    throw new ExtractRoutingError(
+      "Invalid input: destination must be a non-empty string."
+    );
+  }
 
   const minSeverity = input.minSeverityLevel ?? "info";
 

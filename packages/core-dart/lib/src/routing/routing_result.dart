@@ -204,6 +204,97 @@ final class RoutingResult {
     this.destinationError,
   }) : warnings = List.unmodifiable(warnings ?? const []);
 
+  /// Serializes this result to a JSON-compatible map.
+  ///
+  /// JSON key names are harmonized with the Go and TypeScript implementations:
+  /// - [source]                → `"routingSource"`
+  /// - [id]                   → `"routingId"` (decimal string, or null)
+  /// - [destinationBaseAccount] → `"destinationBaseAccount"`
+  /// - [warnings]             → `"warnings"`
+  /// - [destinationError]     → `"destinationError"` (or absent when null)
+  ///
+  /// The routing ID is always serialized as a **decimal string** — never as a
+  /// JS `Number` — so the exact uint64 value survives across isolate boundaries
+  /// and platform channels on Flutter Web.
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'destinationBaseAccount': destinationBaseAccount,
+      'routingId': id?.toString(),
+      'routingSource': source.name,
+      'warnings': warnings
+          .map((w) => <String, dynamic>{
+                'code': w.code,
+                'severity': w.severity,
+                'message': w.message,
+              })
+          .toList(),
+      if (destinationError != null)
+        'destinationError': <String, dynamic>{
+          'code': destinationError!.code,
+          'message': destinationError!.message,
+        },
+    };
+  }
+
+  /// Deserializes a [RoutingResult] from a JSON-compatible map.
+  ///
+  /// Expects the canonical cross-language JSON keys produced by [toJson]:
+  /// `routingSource`, `routingId`, `destinationBaseAccount`, `warnings`,
+  /// and optionally `destinationError`.
+  ///
+  /// The routing ID is parsed from a **decimal string** using [SafeRoutingId]
+  /// to guarantee bit-exact values on Flutter Web.
+  factory RoutingResult.fromJson(Map<String, dynamic> json) {
+    // Parse routingSource enum
+    final sourceName = json['routingSource'] as String? ?? 'none';
+    final source = RoutingSource.values.firstWhere(
+      (e) => e.name == sourceName,
+      orElse: () => RoutingSource.none,
+    );
+
+    // Parse routingId as a decimal string to avoid JS Number precision loss
+    BigInt? id;
+    final rawId = json['routingId'];
+    if (rawId != null) {
+      final idStr = rawId.toString();
+      final safe = SafeRoutingId.tryParse(idStr);
+      id = safe?.toBigInt;
+    }
+
+    // Parse warnings
+    final rawWarnings = json['warnings'];
+    final warnings = <RoutingWarning>[];
+    if (rawWarnings is List) {
+      for (final w in rawWarnings) {
+        if (w is Map<String, dynamic>) {
+          warnings.add(RoutingWarning(
+            code: w['code'] as String? ?? '',
+            severity: w['severity'] as String? ?? 'info',
+            message: w['message'] as String? ?? '',
+          ));
+        }
+      }
+    }
+
+    // Parse optional destinationError
+    DestinationError? destinationError;
+    final rawError = json['destinationError'];
+    if (rawError is Map<String, dynamic>) {
+      destinationError = DestinationError(
+        code: rawError['code'] as String? ?? '',
+        message: rawError['message'] as String? ?? '',
+      );
+    }
+
+    return RoutingResult(
+      source: source,
+      id: id,
+      destinationBaseAccount: json['destinationBaseAccount'] as String?,
+      warnings: warnings,
+      destinationError: destinationError,
+    );
+  }
+
   /// The routing ID as an exact, canonical decimal string, or `null` when
   /// no ID was resolved.
   ///

@@ -129,11 +129,15 @@ void main() {
       expect(result.warnings, [RoutingWarning.invalidDestination]);
     });
 
-    test('throws ExtractRoutingException for empty destination', () {
-      expect(
-        () => extractRoutingSync(RoutingInput(destination: '', memoType: 'none')),
-        throwsA(isA<ExtractRoutingException>()),
+    test('returns structured destinationError for empty destination (#77)', () {
+      final result = extractRoutingSync(
+        RoutingInput(destination: '', memoType: 'none'),
       );
+
+      expect(result.source, RoutingSource.none);
+      expect(result.destinationBaseAccount, isNull);
+      expect(result.id, isNull);
+      expect(result.destinationError, isNotNull);
     });
   });
 
@@ -210,11 +214,15 @@ void main() {
       expect(result.warnings, [RoutingWarning.invalidDestination]);
     });
 
-    test('propagates ExtractRoutingException for empty destination as a Future error', () async {
-      await expectLater(
-        () => extractRouting(RoutingInput(destination: '', memoType: 'none')),
-        throwsA(isA<ExtractRoutingException>()),
+    test('returns structured destinationError for empty destination (#77)', () async {
+      final result = await extractRouting(
+        RoutingInput(destination: '', memoType: 'none'),
       );
+
+      expect(result.source, RoutingSource.none);
+      expect(result.destinationBaseAccount, isNull);
+      expect(result.id, isNull);
+      expect(result.destinationError, isNotNull);
     });
   });
 }

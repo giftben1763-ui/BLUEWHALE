@@ -1,14 +1,18 @@
 name: verify-parity
 
 # Enforces behavioral parity of the shared test vectors across core-ts,
-# core-go, and core-dart. Triggered exclusively by changes to spec/vectors.json.
+# core-go, and core-dart. Triggered on every pull_request that touches any
+# of the three SDK packages or the spec/ directory, ensuring that no
+# implementation diverges from the canonical vector suite regardless of
+# which package is modified.
 #
-# NOTE: Do not mark this workflow (or its `parity-gate` job) as a *Required
-# Status Check* in branch protection unless the vectors file is modified by
-# every PR. Because the `paths` filter only fires on vectors.json changes,
-# PRs that don't touch vectors.json will leave required parity checks in
-# "Expected" / pending forever.
-
+# Previously this workflow only ran when spec/vectors.json changed (Issue #75).
+# It now fires on any PR touching:
+#   - packages/core-ts/**
+#   - packages/core-go/**
+#   - packages/core-dart/**
+#   - spec/**
+#
 # Minimum GITHUB_TOKEN scope: read-only. No deployments, no secret access.
 permissions:
   contents: read
@@ -16,7 +20,10 @@ permissions:
 on:
   pull_request:
     paths:
-      - "spec/vectors.json"
+      - "packages/core-ts/**"
+      - "packages/core-go/**"
+      - "packages/core-dart/**"
+      - "spec/**"
 
 # Cancel superseded runs when a PR is pushed to repeatedly while a check is
 # still in flight, saving CI minutes on rapid iteration.
@@ -73,7 +80,7 @@ jobs:
       - name: Enforce parity across TS, Go, and Dart
         if: needs.test-ts.result != 'success' || needs.test-go.result != 'success' || needs.test-dart.result != 'success'
         run: |
-          echo "::error::Parity check failed: at least one implementation diverged from spec/vectors.json."
+          echo "::error::Parity check failed: at least one implementation diverged from the spec."
           echo "::error::core-ts:   ${{ needs.test-ts.result }}"
           echo "::error::core-go:   ${{ needs.test-go.result }}"
           echo "::error::core-dart: ${{ needs.test-dart.result }}"

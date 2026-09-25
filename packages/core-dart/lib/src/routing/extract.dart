@@ -10,6 +10,13 @@ import 'severity.dart';
 /// Following the standard priority policy, M-address identifiers take
 /// precedence over any provided memo.
 ///
+/// Zero-throw policy: this function never throws for any valid string input.
+/// C-addresses, empty destinations, and unrecognized prefixes are returned as
+/// a structured [RoutingResult] with either an `INVALID_DESTINATION` warning
+/// or a [DestinationError], rather than raising an [ExtractRoutingException].
+/// The only remaining exception case is when [RoutingInput.destination] is
+/// truly invalid at the type level (which cannot happen in typed Dart code).
+///
 /// Web safety: routing IDs are resolved through [SafeRoutingId], which
 /// parses the canonical decimal **string** exactly and never converts
 /// through `int`/JS `Number`. Combined with the `BigInt`-backed
@@ -37,8 +44,17 @@ RoutingResult extractRoutingSync(RoutingInput input) {
 
 RoutingResult _extractRoutingUnfiltered(RoutingInput input) {
   final trimmed = input.destination.trim();
+
+  // Empty destination → return structured destinationError (zero-throw policy).
   if (trimmed.isEmpty) {
-    throw const ExtractRoutingException('Invalid input: destination must be a non-empty string.');
+    return RoutingResult(
+      source: RoutingSource.none,
+      warnings: [],
+      destinationError: DestinationError(
+        code: codes.ErrorCode.unknownPrefix,
+        message: 'Invalid input: destination must be a non-empty string.',
+      ),
+    );
   }
 
   final parsed = parse(input.destination);
